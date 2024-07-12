@@ -14,7 +14,8 @@ Current perft score:
 git clone https://github.com/thegogy/atom
 cd atom
 make release
-
+```
+```
 ## Inspiration
 
 Move generation takes a lot of inspiration from [VincentBab](https://github.com/vincentbab)'s [Belette](https://github.com/vincentbab/Belette/), as well as [Daniel inführ](https://github.com/Gigantua)'s [Gigantua](https://www.codeproject.com/Articles/5313417/Worlds-fastest-Bitboard-Chess-Movegenerator).
