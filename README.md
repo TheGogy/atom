@@ -9,7 +9,6 @@ Current perft score:
 ## Installation
 
 Requires g++ compiler.
-
 ```bash
 git clone https://github.com/thegogy/atom
 cd atom

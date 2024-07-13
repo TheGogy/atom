@@ -67,7 +67,7 @@ void init_pext(Square s, U64 table[], PextEntry magics[]) {
     const U64 fileEdges = FILE_A_BB | FILE_H_BB;
 
     edges = (rankEdges & ~sq_to_bb(rankOf(s)))
-                | (fileEdges & ~sq_to_bb(fileOf(s)));
+          | (fileEdges & ~sq_to_bb(fileOf(s)));
 
     PextEntry& magicEntry = magics[s];
     magicEntry.mask = slidingAttacks<Pt>(s, 0) & ~edges;
