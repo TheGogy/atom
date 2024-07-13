@@ -93,6 +93,7 @@ void testFromFile(const std::string &filename) {
 
     int tests_passed = 0;
     int total_tests = 0;
+    int lines_tested = 0;
     std::string line;
 
     while (std::getline(file, line)) {
@@ -103,7 +104,7 @@ void testFromFile(const std::string &filename) {
         if (!std::getline(line_stream, fen, ';')) continue;
 
         // Print divider
-        std::cout << "\n################################################################\n\n";
+        std::cout << "\n################################ " << lines_tested++ << " ################################\n\n";
 
         std::string token;
         while (std::getline(line_stream, token, ';')) {

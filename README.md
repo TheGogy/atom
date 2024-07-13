@@ -2,14 +2,13 @@
 
 A basic chess bot written in C++. Still in development, expect many bugs!
 
-## Installation
-
-Requires g++ compiler.
-
 Current perft score:
 - starting position (depth 8): 84998978956 nodes, 733799911 nps
 - kiwipete position (depth 7): 374190009323 nodes, 1339588766 nps
 
+## Installation
+
+Requires g++ compiler.
 ```bash
 git clone https://github.com/thegogy/atom
 cd atom

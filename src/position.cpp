@@ -352,7 +352,7 @@ void Position::doMove(Move m) {
     // Update the hash to remove en passant square
     hash ^= zobrist_enpassantKeys[fileOf(state->epSquare) + N_FILES * (state->epSquare == NO_SQUARE)];
 
-    // Save the current board state and advance to the next state
+    // Copy current state to next state
     BoardState *oldState = state++;
     state->epSquare = NO_SQUARE;
     state->castlingRights = oldState->castlingRights;
