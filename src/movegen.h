@@ -40,7 +40,6 @@ inline bool enumeratePromotions(Square from, Square to, const Handler& handler) 
 template<Side Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumeratePawnPromotionMoves(const Position &pos, U64 source, const Handler& handler) {
     constexpr Side Opp = ~Me;
-    //constexpr U64 Rank3 = (Me == WHITE) ? Rank3BB : Rank6BB;
     constexpr U64 Rank7 = (Me == WHITE) ? RANK_7_BB : RANK_2_BB;
     constexpr Direction Up = (Me == WHITE) ? UP : DOWN;
     constexpr Direction UpLeft = (Me == WHITE) ? UP_LEFT : DOWN_RIGHT;

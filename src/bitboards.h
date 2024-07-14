@@ -14,7 +14,7 @@
 // #define bitloop(bb) for(; bb; bb = _blsr_u64(bb))
 
 #define popcount(bb) __builtin_popcountll(bb)
-#define bitscan(bb) Square(__builtin_ctzll(bb))
+#define bitscan(bb) Square(_tzcnt_u64(bb))
 #define pext(bb, mask) _pext_u64(bb, mask)
 
 void init_bbs();
