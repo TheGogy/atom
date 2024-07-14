@@ -9,12 +9,14 @@
 #define set_bit(bitboard, square) ((bitboard) |=  (1ULL << (square)))
 #define pop_bit(bitboard, square) ((bitboard) &= ~(1ULL << (square)))
 
+
 #define bitloop(bb) for(; bb; bb &= bb - 1)
 // This might be faster on some newer CPUs
 // #define bitloop(bb) for(; bb; bb = _blsr_u64(bb))
 
 #define popcount(bb) __builtin_popcountll(bb)
 #define bitscan(bb) Square(_tzcnt_u64(bb))
+#define mask(bitboard) _blsi_u64(bitboard)
 #define pext(bb, mask) _pext_u64(bb, mask)
 
 void init_bbs();
