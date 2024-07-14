@@ -43,7 +43,7 @@ std::tuple<size_t, size_t> perft(Position &pos, int depth) {
     } else {
       pos.doMove<Me>(move);
       if (depth == 1) {
-      std::get<0>(n) = 1;
+        std::get<0>(n) = 1;
       } else {
         n = perft<false, ~Me>(pos, depth - 1);
       }
@@ -59,8 +59,6 @@ std::tuple<size_t, size_t> perft(Position &pos, int depth) {
 
     return true;
   });
-
-  ++total_node;
 
   return std::tuple<size_t, size_t>(total_leaf, total_node);
 }

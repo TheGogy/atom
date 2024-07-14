@@ -12,7 +12,7 @@ int main (int argc, char *argv[]) {
     print_position(pos);
     // testFromFile("tests/perft_vajolet.txt");
 
-    perft(pos, 6);
+    perft(pos, 7);
 
     return 0;
 }
