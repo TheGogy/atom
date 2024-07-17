@@ -4,11 +4,15 @@
 #include <string>
 #include "types.h"
 
+namespace Atom {
+
 class Uci {
 public:
     static std::string formatSquare(Square sq);
     static Square parseSquare(std::string str);
     static std::string formatMove(Move m);
 };
+
+} // namespace Atom
 
 #endif

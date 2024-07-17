@@ -3,17 +3,22 @@
 #include "types.h"
 #include <iostream>
 
-U64 PAWN_ATTACK[N_SIDES][N_SQUARES];
-U64 KNIGHT_MOVE[N_SQUARES];
-U64 KING_MOVE[N_SQUARES];
-PextEntry ROOK_MOVE[N_SQUARES];
-PextEntry BISHOP_MOVE[N_SQUARES];
-U64 BETWEEN_BB[N_SQUARES][N_SQUARES];
+namespace Atom {
 
-U64 ROOK_DATA[0x19000];
-U64 BISHOP_DATA[0x1480];
+Bitboard PAWN_ATTACK[SIDE_NB][SQUARE_NB];
+Bitboard KNIGHT_MOVE[SQUARE_NB];
+Bitboard KING_MOVE[SQUARE_NB];
+PextEntry ROOK_MOVE[SQUARE_NB];
+PextEntry BISHOP_MOVE[SQUARE_NB];
+Bitboard BETWEEN_BB[SQUARE_NB][SQUARE_NB];
 
-void print_bb(const U64 bb) {
+Bitboard ROOK_DATA[0x19000];
+Bitboard BISHOP_DATA[0x1480];
+
+
+// Prints the given bitboard to stdout.
+// Used for debugging.
+void print_bb(const Bitboard bb) {
     int sq;
     std::cout << std::endl;
     for (int rank = 7; rank >= 0; rank--) {
@@ -32,10 +37,15 @@ void print_bb(const U64 bb) {
     std::cout << "Bitboard: " << bb << std::endl;
 }
 
+
+// Returns a bitboard of all the squares that can be attacked up to a direction.
+// This will go up to the occupied piece and stop there, including the occupied
+// piece in the bitboard.
+// Used to initialize sliding piece attacks.
 template<Direction D>
-inline U64 slidingRay(Square sq, U64 occupied) {
-    U64 attacks = 0;
-    U64 attacked_sq = sq_to_bb(sq);
+inline Bitboard slidingRay(Square sq, Bitboard occupied) {
+    Bitboard attacks = 0;
+    Bitboard attacked_sq = sqToBB(sq);
 
     do {
         attacks |= (attacked_sq = shift<D>(attacked_sq));
@@ -44,34 +54,40 @@ inline U64 slidingRay(Square sq, U64 occupied) {
     return attacks;
 }
 
-template <PieceType Pt> U64 slidingAttacks(Square sq, U64 occupied) {
+
+// Calculate the sliding piece attacks for initialization.
+// Do not use this function for calculating attacks in game;
+// use attacks<PieceType>() instead.
+template <PieceType Pt> Bitboard slidingAttacks(Square sq, Bitboard occupied) {
   if constexpr (Pt == ROOK)
-    return slidingRay<UP>(sq, occupied)
-         | slidingRay<DOWN>(sq, occupied)
-         | slidingRay<RIGHT>(sq, occupied)
-         | slidingRay<LEFT>(sq, occupied);
+    return slidingRay<NORTH>(sq, occupied)
+         | slidingRay<SOUTH>(sq, occupied)
+         | slidingRay<EAST>(sq, occupied)
+         | slidingRay<WEST>(sq, occupied);
   else
-    return slidingRay<UP_RIGHT>(sq, occupied)
-         | slidingRay<UP_LEFT>(sq, occupied)
-         | slidingRay<DOWN_RIGHT>(sq, occupied)
-         | slidingRay<DOWN_LEFT>(sq, occupied);
+    return slidingRay<NORTH_EAST>(sq, occupied)
+         | slidingRay<NORTH_WEST>(sq, occupied)
+         | slidingRay<SOUTH_EAST>(sq, occupied)
+         | slidingRay<SOUTH_WEST>(sq, occupied);
 }
 
+
+// Initializes the PEXT lookup table for a given sliding piece.
 template<PieceType Pt>
-void init_pext(Square s, U64 table[], PextEntry magics[]) {
+void init_pext(Square s, Bitboard table[], PextEntry magics[]) {
     static int size = 0;
-    U64 edges, occ;
+    Bitboard edges, occ;
 
     // Define the edges of the board
-    const U64 rankEdges = RANK_1_BB | RANK_8_BB;
-    const U64 fileEdges = FILE_A_BB | FILE_H_BB;
+    const Bitboard rankEdges = RANK_1_BB | RANK_8_BB;
+    const Bitboard fileEdges = FILE_A_BB | FILE_H_BB;
 
     edges = (rankEdges & ~sq_to_bb(rankOf(s)))
           | (fileEdges & ~sq_to_bb(fileOf(s)));
 
     PextEntry& magicEntry = magics[s];
     magicEntry.mask = slidingAttacks<Pt>(s, 0) & ~edges;
-    magicEntry.data = (s == A1) ? table : magics[s - 1].data + size;
+    magicEntry.data = (s == SQ_A1) ? table : magics[s - 1].data + size;
 
     size = 0;
     occ = 0;
@@ -83,27 +99,45 @@ void init_pext(Square s, U64 table[], PextEntry magics[]) {
     } while (occ);
 }
 
-inline void init_pawn_attacks(Square s, U64 bb) {
-    PAWN_ATTACK[WHITE][s] = shift<UP_LEFT>(bb)    | shift<UP_RIGHT>(bb);
-    PAWN_ATTACK[BLACK][s] = shift<DOWN_RIGHT>(bb) | shift<DOWN_LEFT>(bb);
+
+// Initializes the pawn attack lookups.
+inline void init_pawn_attacks(Square s, Bitboard bb) {
+    PAWN_ATTACK[WHITE][s] = shift<NORTH_WEST>(bb) | shift<NORTH_EAST>(bb);
+    PAWN_ATTACK[BLACK][s] = shift<SOUTH_EAST>(bb) | shift<SOUTH_WEST>(bb);
 }
 
-inline void init_knight_move(Square s, U64 bb) {
-    KNIGHT_MOVE[s] = shift<UP_LEFT>(shift<UP>(bb))      | shift<UP_RIGHT>(shift<UP>(bb))
-                   | shift<UP_RIGHT>(shift<RIGHT>(bb))  | shift<DOWN_RIGHT>(shift<RIGHT>(bb))
-                   | shift<DOWN_RIGHT>(shift<DOWN>(bb)) | shift<DOWN_LEFT>(shift<DOWN>(bb))
-                   | shift<DOWN_LEFT>(shift<LEFT>(bb))  | shift<UP_LEFT>(shift<LEFT>(bb));
+
+// Initializes the knight move lookups.
+inline void init_knight_move(Square s, Bitboard bb) {
+    KNIGHT_MOVE[s] = shift<NORTH_WEST>(shift<NORTH>(bb)) | shift<NORTH_EAST>(shift<NORTH>(bb))
+                   | shift<NORTH_EAST>(shift<EAST>(bb))  | shift<SOUTH_EAST>(shift<EAST>(bb))
+                   | shift<SOUTH_EAST>(shift<SOUTH>(bb)) | shift<SOUTH_WEST>(shift<SOUTH>(bb))
+                   | shift<SOUTH_WEST>(shift<WEST>(bb))  | shift<NORTH_WEST>(shift<WEST>(bb));
 }
 
-inline void init_king_move(Square s, U64 bb) {
-    KING_MOVE[s] = shift<UP>(bb) | shift<DOWN>(bb) | shift<RIGHT>(bb) | shift<LEFT>(bb)
-                 | shift<UP_RIGHT>(bb) | shift<UP_LEFT>(bb) | shift<DOWN_RIGHT>(bb) | shift<DOWN_LEFT>(bb);
+
+// Initializes the king move lookups.
+inline void init_king_move(Square s, Bitboard bb) {
+    KING_MOVE[s] = shift<NORTH>(bb) | shift<SOUTH>(bb) | shift<EAST>(bb) | shift<WEST>(bb)
+                 | shift<NORTH_EAST>(bb) | shift<NORTH_WEST>(bb) | shift<SOUTH_EAST>(bb) | shift<SOUTH_WEST>(bb);
 }
 
-inline void init_between_bb(Square x, U64 bb_x) {
-    U64 bb_y;
-    for (Square y = FIRST_SQUARE; y < N_SQUARES; ++y) {
-        bb_y = sq_to_bb(y);
+
+// Initializes the "BETWEEN_BB" table.
+// This table contains bitboards for all the squares between the two
+// squares given (exclusive). For example, for squares E3 and E8:
+// 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0
+// 0 0 0 1 1 1 1 0
+// 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0
+// 0 0 0 0 0 0 0 0
+inline void init_between_bb(Square x, Bitboard bb_x) {
+    Bitboard bb_y;
+    for (Square y = SQ_ZERO; y < SQUARE_NB; ++y) {
+        bb_y = sqToBB(y);
         if (slidingAttacks<ROOK>(x, EMPTY) & bb_y) {
             BETWEEN_BB[x][y] |= slidingAttacks<ROOK>(x, bb_y) & slidingAttacks<ROOK>(y, bb_x);
         } else if (slidingAttacks<BISHOP>(x, EMPTY) & bb_y) {
@@ -112,9 +146,12 @@ inline void init_between_bb(Square x, U64 bb_x) {
     }
 }
 
+
+// Initializes all lookups. This should be called as early as possible
+// when starting the program.
 void init_bbs() {
-    for (Square s = FIRST_SQUARE; s < N_SQUARES; ++s) {
-        U64 bb = sq_to_bb(s);
+    for (Square s = SQ_ZERO; s < SQUARE_NB; ++s) {
+        Bitboard bb = sqToBB(s);
         init_pawn_attacks(s, bb);
         init_knight_move(s, bb);
         init_king_move(s, bb);
@@ -124,3 +161,5 @@ void init_bbs() {
     }
 
 }
+
+} // namespace Atom

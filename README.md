@@ -2,9 +2,9 @@
 
 A basic chess bot written in C++. Still in development, expect many bugs!
 
-Current perft score:
-- starting position (depth 8): 84998978956 nodes, 733799911 nps
-- kiwipete position (depth 7): 374190009323 nodes, 1339588766 nps
+Current perft score (i5-11400H @ 2.7GHz, max 4.5GHz):
+- starting position (depth 7): 3195901860 nodes, 4250 ms, 751976908 nps
+- kiwipete position (depth 7): 374190009323 nodes, 274811 ms, 1361626751 nps
 
 ## Installation
 

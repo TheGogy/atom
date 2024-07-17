@@ -9,41 +9,43 @@
 #include <iostream>
 #include <fstream>
 
+namespace Atom {
+
 using std::ifstream;
 
 template <bool Div, Side Me> size_t perft(Position &pos, int depth) {
-  size_t total = 0;
-  MoveList moves;
+    size_t total = 0;
+    MoveList moves;
 
-  if (!Div && depth <= 1) {
-    enumerateLegalMoves<Me>(pos, [&](Move m) {
-      ++total;
-      return true;
+    if (!Div && depth <= 1) {
+        enumerateLegalMoves<Me>(pos, [&](Move m) {
+            ++total;
+            return true;
+        });
+
+        return total;
+    }
+
+    enumerateLegalMoves<Me>(pos, [&](Move move) {
+        size_t n = 0;
+
+        if (Div && depth == 1) {
+            n = 1;
+        } else {
+            pos.doMove<Me>(move);
+            n = (depth == 1 ? 1 : perft<false, ~Me>(pos, depth - 1));
+            pos.undoMove<Me>(move);
+        }
+
+        total += n;
+
+        if (Div && n > 0)
+            std::cout << Uci::formatMove(move) << ": " << n << std::endl;
+
+        return true;
     });
 
     return total;
-  }
-
-  enumerateLegalMoves<Me>(pos, [&](Move move) {
-    size_t n = 0;
-
-    if (Div && depth == 1) {
-      n = 1;
-    } else {
-      pos.doMove<Me>(move);
-      n = (depth == 1 ? 1 : perft<false, ~Me>(pos, depth - 1));
-      pos.undoMove<Me>(move);
-    }
-
-    total += n;
-
-    if (Div && n > 0)
-      std::cout << Uci::formatMove(move) << ": " << n << std::endl;
-
-    return true;
-  });
-
-  return total;
 }
 
 template size_t perft<true, WHITE>(Position &pos, int depth);
@@ -67,14 +69,14 @@ void perft(Position &pos, int depth) {
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
     std::cout << std::endl;
     std::cout << "Nodes:    " << n << std::endl;
-	std::cout << "Time:     " << elapsed << "ms" << std::endl;
-	std::cout << "NPS:      " << size_t(n * 1000 / elapsed) << std::endl;
+    std::cout << "Time:     " << elapsed << "ms" << std::endl;
+    std::cout << "NPS:      " << size_t(n * 1000 / elapsed) << std::endl;
 }
 
-bool runTest(const std::string &fen, int depth, U64 expected_nodes) {
+bool runTest(const std::string &fen, int depth, Bitboard expected_nodes) {
     Position pos;
     pos.setFromFEN(fen);
-    U64 nodes = perft<false>(pos, depth);
+    Bitboard nodes = perft<false>(pos, depth);
     if (nodes == expected_nodes) {
         std::cout << "[PASS] " << fen << std::endl;
         return true;
@@ -130,3 +132,5 @@ void testFromFile(const std::string &filename) {
     std::cout << "Total tests:      " << total_tests << std::endl;
     std::cout << "Tests passed:     " << tests_passed << std::endl;
 }
+
+} // namespace Atom
