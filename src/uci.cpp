@@ -1,5 +1,9 @@
 
 #include "uci.h"
+#include "position.h"
+#include "types.h"
+#include <algorithm>
+#include <cmath>
 
 namespace Atom {
 
@@ -45,6 +49,37 @@ std::string Uci::formatMove(Move m) {
     }
 
     return str;
+}
+
+
+// Gets the win rate parameters, taken from stockfish to ensure
+// compatibility with NNUE output.
+struct WinRateParams {
+    double a;
+    double b;
+};
+
+WinRateParams getWinRateParams(const Position &pos) {
+    int material = pos.nPieces(PAWN) +
+                   pos.nPieces(KNIGHT) * 3 +
+                   pos.nPieces(BISHOP) * 3 +
+                   pos.nPieces(ROOK)   * 5 +
+                   pos.nPieces(QUEEN)  * 9;
+
+    double m = std::clamp(material, 17, 78) / 58.0;
+    constexpr double as[] = {-41.25712052, 121.47473115, -124.46958843, 411.84490997};
+    constexpr double bs[] = {84.92998051, -143.66658718, 80.09988253, 49.80869370};
+
+    double a = (((as[0] * m + as[1]) * m + as[2]) * m) + as[3];
+    double b = (((bs[0] * m + bs[1]) * m + bs[2]) * m) + bs[3];
+
+    return {a, b};
+}
+
+
+int Uci::toCentipawns(Value v, const Position &pos) {
+    auto [a, b] = getWinRateParams(pos);
+    return std::round(100 * int(v) / a);
 }
 
 } // namespace Atom

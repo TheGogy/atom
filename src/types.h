@@ -1,7 +1,9 @@
 #ifndef TYPES_H
 #define TYPES_H
 
+#include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <string>
 
 namespace Atom {
@@ -30,9 +32,9 @@ enum MoveType {
 };
 
 
-enum Side {
+enum Color {
     WHITE, BLACK,
-    SIDE_NB = 2
+    COLOR_NB = 2
 };
 
 
@@ -136,11 +138,18 @@ constexpr Bitboard DARK_SQUARES  = 0x5555555555555555ULL;
 // Returns a bitboard with the given square set.
 constexpr Bitboard sqToBB(Square s) { return (1ULL << s); }
 
+// Allow for incrementing and decrementing some data types
+#define INC_DEC_OPS_ON(T) \
+    inline T& operator++(T& d) { return d = T(int(d) + 1); } \
+    inline T& operator--(T& d) { return d = T(int(d) - 1); }
 
-// Increment and decrement squares
-inline Square& operator++(Square& sq) { return sq = Square(int(sq) + 1); }
-inline Square& operator--(Square& sq) { return sq = Square(int(sq) - 1); }
+INC_DEC_OPS_ON(Piece)
+INC_DEC_OPS_ON(PieceType)
+INC_DEC_OPS_ON(Rank)
+INC_DEC_OPS_ON(File)
+INC_DEC_OPS_ON(Square)
 
+#undef INC_DEC_OPS_ON
 
 // Operations on squares with directions
 constexpr Square operator+(Square sq, Direction dir) { return Square(int(sq) + int(dir)); }
@@ -155,9 +164,9 @@ constexpr CastlingRight operator&(CastlingRight cr1, CastlingRight cr2) { return
 constexpr CastlingRight operator~(CastlingRight cr1) { return CastlingRight(~int(cr1)); }
 inline CastlingRight& operator|=(CastlingRight& cr, CastlingRight other) { return cr = cr | other; }
 inline CastlingRight& operator&=(CastlingRight& cr, CastlingRight other) { return cr = cr & other; }
-constexpr CastlingRight operator&(Side s, CastlingRight cr) { return CastlingRight((s == WHITE ? WHITE_CASTLING : BLACK_CASTLING) & cr); }
+constexpr CastlingRight operator&(Color s, CastlingRight cr) { return CastlingRight((s == WHITE ? WHITE_CASTLING : BLACK_CASTLING) & cr); }
 
-constexpr Side operator~(Side c) { return Side(c ^ BLACK); }
+constexpr Color operator~(Color c) { return Color(c ^ BLACK); }
 
 
 constexpr Square CastlingKingTo[CASTLING_RIGHT_NB] = {
@@ -286,16 +295,15 @@ constexpr PieceType movePromotionType(Move m) { return PieceType(((m >> 12) & 3)
 
 
 // Creates a piece given the side and piecetype.
-constexpr Piece makePiece(Side side, PieceType p) { return Piece((side << 3) + p); }
+constexpr Piece makePiece(Color side, PieceType p) { return Piece((side << 3) + p); }
 
 
 // Get piece information
 constexpr PieceType typeOf(Piece p)   { return PieceType(p & 7); }
-constexpr Side sideOf(Piece p)        { return Side(p >> 3); }
+constexpr Color sideOf(Piece p)        { return Color(p >> 3); }
 
 
-constexpr Direction pawnDirection(Side s) { return s == WHITE ? NORTH : SOUTH; }
-
+constexpr Direction pawnDirection(Color s) { return s == WHITE ? NORTH : SOUTH; }
 
 // Operations on bitboards and squares
 inline Bitboard operator&   (Bitboard b, Square s)  { return b & sqToBB(s); }
@@ -310,35 +318,30 @@ inline Bitboard  operator|  (Square s1, Square s2)  { return sqToBB(s1) | sqToBB
 
 
 // Resizeable vector. Used for move list.
-template <typename Tn, int N, typename SizeT = uint32_t> 
-class vector {
-    Tn data[N];
-    SizeT length;
+template <typename Tn, std::size_t MaxSize>
+class ValueList {
 public:
-    typedef Tn* iterator;
-    typedef const Tn* const_iterator;
-    vector() noexcept: length(0) {}
+    ValueList() noexcept: size_(0) {}
 
     // Get data from start and end
-    inline iterator       start()       { return &data[0]; };
-    inline const_iterator start() const { return &data[0]; };
-    inline iterator       end()         { return &data[length]; };
-    inline const_iterator end()   const { return &data[length]; };
+    const Tn* begin() const { return &data_[0]; };
+    const Tn* end()   const { return &data_ + size_; };
 
     // Get data from specific point
-    inline       Tn &operator[](SizeT i)       { return data[i]; }
-    inline const Tn &operator[](SizeT i) const { return data[i]; }
+    const Tn &operator[](int i) const { return data_[i]; }
 
     // Get other data about vector
-    inline bool isempty()  const { return length == 0; }
-    inline SizeT size()    const { return length; }
-    inline SizeT maxsize() const { return N; }
+    inline bool isEmpty()        const { return size_ == 0; }
+    inline std::size_t size()    const { return size_; }
+    inline std::size_t maxsize() const { return MaxSize; }
 
     // Functions
-    inline void clear() { length = 0; }
-    inline void push(const Tn& element) { data[length++] = element; }
-    inline void push(      Tn& element) { data[length++] = element; }
-    inline Tn   pop() const             { return data[length--]; }
+    inline void clear() { size_ = 0; }
+    inline void push_back(const Tn& element) { data_[size_++] = element; }
+
+private:
+    Tn data_[MaxSize];
+    std::size_t size_ = 0;
 };
 
 
@@ -360,6 +363,30 @@ struct DirtyPiece {
     Square from[3];
     Square to[3];
 };
+
+using Value = int;
+
+constexpr Value VALUE_ZERO     = 0;
+constexpr Value VALUE_DRAW     = 0;
+constexpr Value VALUE_NONE     = 32002;
+constexpr Value VALUE_INFINITE = 32001;
+
+constexpr Value VALUE_MATE             = 32000;
+constexpr Value VALUE_MATE_IN_MAX_PLY  = VALUE_MATE - MAX_PLY;
+constexpr Value VALUE_MATED_IN_MAX_PLY = -VALUE_MATE_IN_MAX_PLY;
+
+constexpr Value VALUE_TB                 = VALUE_MATE_IN_MAX_PLY - 1;
+constexpr Value VALUE_TB_WIN_IN_MAX_PLY  = VALUE_TB - MAX_PLY;
+constexpr Value VALUE_TB_LOSS_IN_MAX_PLY = -VALUE_TB_WIN_IN_MAX_PLY;
+
+// In the code, we make the assumption that these values
+// are such that non_pawn_material() can be used to uniquely
+// identify the material on the board.
+constexpr Value VALUE_PAWN   = 208;
+constexpr Value VALUE_KNIGHT = 781;
+constexpr Value VALUE_BISHOP = 825;
+constexpr Value VALUE_ROOK   = 1276;
+constexpr Value VALUE_QUEEN  = 2538;
 
 } // namespace Atom
 

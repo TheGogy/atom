@@ -13,7 +13,7 @@ namespace Atom {
 
 using std::ifstream;
 
-template <bool Div, Side Me> size_t perft(Position &pos, int depth) {
+template <bool Div, Color Me> size_t perft(Position &pos, int depth) {
     size_t total = 0;
     MoveList moves;
 

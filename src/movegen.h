@@ -10,7 +10,7 @@ namespace Atom {
 #define HANDLE_MOVE(...)     if (!handler(__VA_ARGS__)) return false
 
 
-using MoveList = vector<Move, MAX_MOVE, uint8_t>;
+using MoveList = ValueList<Move, MAX_MOVE>;
 
 
 // Differentiate between different types of move. This allows
@@ -23,7 +23,7 @@ enum MoveGenType {
 
 
 // Enumerate a single promotion move
-template<Side Me, PieceType PromotionType, typename Handler>
+template<Color Me, PieceType PromotionType, typename Handler>
 inline bool enumeratePromotion(Square from, Square to, const Handler& handler) {
     HANDLE_MOVE(makeMove<PROMOTION>(from, to, PromotionType));
     return true;
@@ -31,7 +31,7 @@ inline bool enumeratePromotion(Square from, Square to, const Handler& handler) {
 
 
 // Enumerate all promotion moves for a single pawn
-template<Side Me, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumeratePromotions(Square from, Square to, const Handler& handler) {
     if constexpr (MGType & TACTICAL_MOVES) {
         ENUMERATE_MOVES(enumeratePromotion<Me, QUEEN>(from, to, handler));
@@ -48,9 +48,9 @@ inline bool enumeratePromotions(Square from, Square to, const Handler& handler) 
 
 
 // Enumerates all pawn promotion moves, including checks.
-template<Side Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumeratePawnPromotionMoves(const Position &pos, Bitboard source, const Handler& handler) {
-    constexpr Side Opp = ~Me;
+    constexpr Color Opp = ~Me;
 
     constexpr Bitboard Rank7    = (Me == WHITE) ? RANK_7_BB : RANK_2_BB;
     constexpr Direction Up      = (Me == WHITE) ? NORTH : SOUTH;
@@ -120,9 +120,9 @@ inline bool enumeratePawnPromotionMoves(const Position &pos, Bitboard source, co
 
 
 // Enumerate pawn en passant moves.
-template<Side Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, const Handler& handler) {
-    constexpr Side Opp = ~Me;
+    constexpr Color Opp = ~Me;
     constexpr Direction pawnDir = pawnDirection(Me);
     constexpr Bitboard epRank = (Me == WHITE ? RANK_5_BB : RANK_4_BB);
 
@@ -174,9 +174,9 @@ inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, co
 
 // Generate normal pawn moves.
 // This includes normal pushes and captures.
-template<Side Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const Handler& handler) {
-    constexpr Side Opp = ~Me;
+    constexpr Color Opp = ~Me;
     constexpr Bitboard Rank3 = (Me == WHITE) ? RANK_3_BB : RANK_6_BB;
     constexpr Bitboard Rank7 = (Me == WHITE) ? RANK_7_BB : RANK_2_BB;
     constexpr Direction Up      = (Me == WHITE) ? NORTH : SOUTH;
@@ -243,7 +243,7 @@ inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const
 
 
 // Enumerates all pawn moves.
-template<Side Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumeratePawnMoves(const Position &pos, Bitboard source, const Handler& handler) {
     ENUMERATE_MOVES(enumeratePawnNormalMoves<Me, InCheck, MGType, Handler>(pos, source, handler));
     ENUMERATE_MOVES(enumeratePawnPromotionMoves<Me, InCheck, MGType, Handler>(pos, source, handler));
@@ -257,7 +257,7 @@ inline bool enumeratePawnMoves(const Position &pos, Bitboard source, const Handl
 
 
 // Enumerates all castling moves.
-template<Side Me, typename Handler>
+template<Color Me, typename Handler>
 inline bool enumerateCastlingMoves(const Position &pos, const Handler& handler) {
     Square kingSquare = pos.getKingSquare(Me);
     const CastlingRight kingSide  = Me & KING_SIDE;
@@ -282,7 +282,7 @@ inline bool enumerateCastlingMoves(const Position &pos, const Handler& handler) 
 
 
 // Enumerates all king moves.
-template<Side Me, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumerateKingMoves(const Position &pos, Square from, const Handler& handler) {
     Bitboard dest = attacks<KING>(from) & ~pos.getPiecesBB(Me) & ~pos.threatened();
 
@@ -301,7 +301,7 @@ inline bool enumerateKingMoves(const Position &pos, Square from, const Handler& 
 
 
 // Enumerate all knight moves.
-template<Side Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumerateKnightMoves(const Position &pos, Bitboard source, const Handler& handler) {
 
     // Pinned knights can never move: their moves are both orthogonal *and* diagonal, so filter
@@ -329,7 +329,7 @@ inline bool enumerateKnightMoves(const Position &pos, Bitboard source, const Han
 
 
 // Enumerate all bishop + diagonal queen moves.
-template<Side Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumerateBishopSliderMoves(const Position &pos, Bitboard source, const Handler& handler) {
     const Bitboard oppPiecesBB = pos.getPiecesBB(~Me);
 
@@ -378,7 +378,7 @@ inline bool enumerateBishopSliderMoves(const Position &pos, Bitboard source, con
 
 
 // Enumerate all rook + orthogonal queen moves.
-template<Side Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumerateRookSliderMoves(const Position &pos, Bitboard source, const Handler& handler) {
     const Bitboard oppPiecesBB = pos.getPiecesBB(~Me);
 
@@ -426,7 +426,7 @@ inline bool enumerateRookSliderMoves(const Position &pos, Bitboard source, const
 
 
 // Enumerates all legal moves within and calls the handler callback on each legal move found.
-template<Side Me, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumerateLegalMoves(const Position &pos, const Handler& handler) {
     switch(pos.nCheckers()) {
         case 0:

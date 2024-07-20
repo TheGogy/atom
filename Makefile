@@ -1,6 +1,9 @@
-export TARGET_EXEC := atom
-export BUILD_DIR := ./build
-export SRC_DIR := ./src
+CXX := g++
+# CXX := clang++
+
+TARGET_EXEC := atom
+SRC_DIRS := src #src/incbin src/nnue src/nnue/features src/nnue/layers
+SOURCES := $(wildcard $(addsuffix /*.cpp,$(SRC_DIRS)))
 
 COMMONFLAGS := -Wall -std=c++20 -fno-rtti
 SSE2FLAGS   := $(COMMONFLAGS) -msse2 -DUSE_SSE -DUSE_SSE2
@@ -9,14 +12,14 @@ AVX2FLAGS   := $(SSE4FLAGS) -mavx2 -DUSE_AVX2
 BMI2FLAGS   := $(AVX2FLAGS) -mbmi -mbmi2 -DUSE_BMI2
 AVX512FLAGS := $(BMI2FLAGS) -mavx512f -mavx512bw -mavx512dq -DUSE_AVX512
 
-BESTFLAGS := $(shell ./detect_cpu_flags.sh)
+CPUFLAGS := $(shell ./detect_cpu_flags.sh)
 
-CPPFLAGS := $($(BESTFLAGS))
-LDFLAGS := $($(BESTFLAGS))
+CXXFLAGS := $($(CPUFLAGS))
+LDFLAGS := $($(CPUFLAGS))
 
-DEBUG_CPPFLAGS := $(CPPFLAGS) -g -O0 -DDEBUG
-RELEASE_CPPFLAGS := $(CPPFLAGS) -O3 -funroll-loops -finline -fomit-frame-pointer -flto -DNDEBUG -mtune=native
-PROFILE_CPPFLAGS := $(CPPFLAGS) $(RELEASE_CPPFLAGS) -g
+DEBUG_CXXFLAGS := $(CXXFLAGS) -g -O0 -DDEBUG
+RELEASE_CXXFLAGS := $(CXXFLAGS) -O3 -funroll-loops -finline -fomit-frame-pointer -flto -DNDEBUG -mtune=native
+PROFILE_CXXFLAGS := $(CXXFLAGS) $(RELEASE_CXXFLAGS) -g
 
 DEBUG_LDFLAGS := $(LDFLAGS)
 RELEASE_LDFLAGS := $(LDFLAGS) -flto -s -static
@@ -27,20 +30,18 @@ PROFILE_LDFLAGS := $(LDFLAGS) -flto -g -static
 all: release
 
 debug:
-	@echo "Using flag set: $(BESTFLAGS)"
-	$(MAKE) -f build.mk TARGET=Debug CPPFLAGS="$(DEBUG_CPPFLAGS)" LDFLAGS="$(DEBUG_LDFLAGS)"
+	@echo "Using flag set: $(CPUFLAGS)"
+	$(CXX) $(DEBUG_CXXFLAGS) $(DEBUG_LDFLAGS) -o $(TARGET_EXEC) $(SOURCES)
 
 release:
-	@echo "Using flag set: $(BESTFLAGS)"
-	$(MAKE) -f build.mk clean TARGET=Release
-	$(MAKE) -f build.mk TARGET=Release CPPFLAGS="$(RELEASE_CPPFLAGS)" LDFLAGS="$(RELEASE_LDFLAGS)"
+	@echo "Using flag set: $(CPUFLAGS)"
+	$(CXX) $(RELEASE_CXXFLAGS) $(RELEASE_LDFLAGS) -o $(TARGET_EXEC) $(SOURCES)
 
 profile:
-	@echo "Using flag set: $(BESTFLAGS)"
-	$(MAKE) -f build.mk clean TARGET=Profile
-	$(MAKE) -f build.mk TARGET=Profile CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)"
+	@echo "Using flag set: $(CPUFLAGS)"
+	$(CXX) $(PROFILE_CXXFLAGS) $(PROFILE_LDFLAGS) -o $(TARGET_EXEC) $(SOURCES)
 
 clean:
-	$(MAKE) -f build.mk clean TARGET=Debug
-	$(MAKE) -f build.mk clean TARGET=Release
+	rm -rf *.o
+	rm -f $(TARGET_EXEC)
 

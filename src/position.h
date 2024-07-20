@@ -1,9 +1,12 @@
 #ifndef POSITION_H
 #define POSITION_H
 
-#include "bitboards.h"
+#include "bitboard.h"
+#include "nnue/nnue_accumulator.h"
+#include "nnue/nnue_architecture.h"
 #include "types.h"
 #include "zobrist.h"
+
 #include <sstream>
 
 namespace Atom {
@@ -36,48 +39,53 @@ struct BoardState {
     // Hash, used for transposition
     uint64_t hash;
 
-    inline BoardState &prev()             { return *(this - 1); }
-    inline const BoardState &prev() const { return *(this - 1); }
-    inline BoardState &next()             { return *(this + 1); }
-    inline const BoardState &next() const { return *(this + 1); }
+    // Used by NNUE
+    DirtyPiece dirtyPiece;
+    NNUE::Accumulator<NNUE::TransformedFeatureDimensionsBig>   accumulatorBig;
+    NNUE::Accumulator<NNUE::TransformedFeatureDimensionsSmall> accumulatorSmall;
+    BoardState *previous;
+
 };
 
 
 class Position {
 public:
-    Position();                                 // Default constructor.
-    Position(const Position &other);            // Copy constructor.
-    Position &operator=(const Position &other); // Copy assignment operator.
+    Position();                                     // Default constructor.
+    Position(const Position &other);                // Copy constructor.
+    Position &operator=(const Position &other);     // Copy assignment operator.
+    Position(Position &&other) noexcept;            // Move constructor.
+    Position &operator=(Position &&other)noexcept;  // Move assignment operator.
+    ~Position();                                    // Destructor
 
-    void reset();                               // Reset the position to zeros.
+    void reset();                                   // Reset the position to zeros.
 
-    bool setFromFEN(const std::string &fen);    // Sets the position to given FEN.
-    std::string fen() const;                    // Returns FEN of current position.
-    std::string printable() const;              // Returns printable representation of the board.
+    bool setFromFEN(const std::string &fen);        // Sets the position to given FEN.
+    std::string fen() const;                        // Returns FEN of current position.
+    std::string printable() const;                  // Returns printable representation of the board.
 
     // Make and unmake the given move
-    inline void doMove(Move m)   { getSideToMove() == WHITE ? doMove<WHITE>(m) : doMove<BLACK>(m); }
+    inline void doMove(Move m)   { getSideToMove() == WHITE ? doMove<WHITE>(m)   : doMove<BLACK>(m); }
     inline void undoMove(Move m) { getSideToMove() == WHITE ? undoMove<WHITE>(m) : undoMove<BLACK>(m); }
-    template <Side Me> inline void doMove(Move m);
-    template <Side Me> inline void undoMove(Move m);
+    template <Color Me> inline void doMove(Move m);
+    template <Color Me> inline void undoMove(Move m);
 
     // Returns position metadata.
-    inline Side getSideToMove() const   { return sideToMove; }
+    inline Color getSideToMove()  const { return sideToMove; }
     inline int getHalfMoveClock() const { return state->fiftyMoveRule; }
-    inline int getHalfMoves() const     { return state->halfMoves; }
-    inline int getFullMoves() const     { return 1 + (getHalfMoves() - (sideToMove == BLACK)) / 2; }
-    inline Square getEpSquare() const   { return state->epSquare; }
+    inline int getHalfMoves()     const { return state->halfMoves; }
+    inline int getFullMoves()     const { return 1 + (getHalfMoves() - (sideToMove == BLACK)) / 2; }
+    inline Square getEpSquare()   const { return state->epSquare; }
     inline Piece getPieceAt(Square sq) const { return pieces[sq]; }
     inline bool isEmpty(Square sq) const { return getPieceAt(sq) == NO_PIECE; }
-    inline bool isEmpty(Bitboard b) const    { return !(b & getPiecesBB()); }
+    inline bool isEmpty(Bitboard b) const { return !(b & getPiecesBB()); }
     inline bool canCastle(CastlingRight cr) const  { return state->castlingRights & cr; }
     inline CastlingRight getCastlingRights() const { return state->castlingRights; }
 
     // Returns various bitboards.
     inline Bitboard getPiecesBB() const          { return sideBB[WHITE] | sideBB[BLACK]; }
-    inline Bitboard getPiecesBB(Side side) const { return sideBB[side]; }
-    inline Bitboard getPiecesBB(Side side, PieceType pt) const { return piecesBB[makePiece(side, pt)]; }
-    inline Bitboard getPiecesBB(Side side, PieceType pt1, PieceType pt2) const {
+    inline Bitboard getPiecesBB(Color side) const { return sideBB[side]; }
+    inline Bitboard getPiecesBB(Color side, PieceType pt) const { return piecesBB[makePiece(side, pt)]; }
+    inline Bitboard getPiecesBB(Color side, PieceType pt1, PieceType pt2) const {
         return piecesBB[makePiece(side, pt1)] | piecesBB[makePiece(side, pt2)];
     }
     inline Bitboard getPiecesBB(PieceType pt) const {
@@ -91,16 +99,16 @@ public:
     inline Bitboard getEmptyBB() const { return ~getPiecesBB(); }
 
     // Returns the current king square.
-    inline Square getKingSquare(Side side) const {
+    inline Square getKingSquare(Color side) const {
         return Square(bitscan(piecesBB[side == WHITE ? W_KING : B_KING]));
     }
 
     // Returns the count of the number of pieces.
-    inline Bitboard nPieces() const                        { return popcount(getPiecesBB(WHITE) | getPiecesBB(BLACK)); }
-    inline Bitboard nPieces(PieceType pt) const            { return popcount(getPiecesBB(WHITE, pt) | getPiecesBB(BLACK, pt)); }
-    inline Bitboard nPieces(Side side) const               { return popcount(getPiecesBB(side)); }
-    inline Bitboard nPieces(Side side, PieceType pt) const { return popcount(getPiecesBB(side, pt)); }
-    inline Bitboard nPieces(Side side, PieceType pt1, PieceType pt2) const { return popcount(getPiecesBB(side, pt1, pt2)); }
+    inline Bitboard nPieces()                         const { return popcount(getPiecesBB(WHITE) | getPiecesBB(BLACK)); }
+    inline Bitboard nPieces(PieceType pt)             const { return popcount(getPiecesBB(WHITE, pt) | getPiecesBB(BLACK, pt)); }
+    inline Bitboard nPieces(Color side)               const { return popcount(getPiecesBB(side)); }
+    inline Bitboard nPieces(Color side, PieceType pt) const { return popcount(getPiecesBB(side, pt)); }
+    inline Bitboard nPieces(Color side, PieceType pt1, PieceType pt2) const { return popcount(getPiecesBB(side, pt1, pt2)); }
 
     // Returns a bitboard of all the pieces that can attack the given square
     inline Bitboard getAttackersTo(const Square s, const Bitboard occ) const;
@@ -128,35 +136,40 @@ public:
     inline bool isFiftyMoveDraw()   const { return state->fiftyMoveRule > 99; }
     inline bool isDraw()            const { return isMaterialDraw() || isFiftyMoveDraw() || isRepetitionDraw(); }
 
-    // Returns the previous move.
+    // Get the previous move.
     inline Move previousMove()    const { return state->move; }
+
+    // Get the current board state (used for NNUE)
+    inline BoardState* getState() const { return state; }
+
+    // Add / remove pieces (used for NNUE / evaluation testing)
+    inline void setPiece(Square sq, Piece p);
+    inline void unsetPiece(Square sq);
 
 private:
     void setCastlingRights(CastlingRight cr);
 
-    template <Side Me, MoveType Mt> void doMove(Move m);
-    template <Side Me, MoveType Mt> void undoMove(Move m);
+    template <Color Me, MoveType Mt> void doMove(Move m);
+    template <Color Me, MoveType Mt> void undoMove(Move m);
 
-    template <Side Me> inline void setPiece(Square sq, Piece p);
-    template <Side Me> inline void unsetPiece(Square sq);
-    template <Side Me> inline void movePiece(Square from, Square to);
+    template <Color Me> inline void setPiece(Square sq, Piece p);
+    template <Color Me> inline void unsetPiece(Square sq);
+    template <Color Me> inline void movePiece(Square from, Square to);
 
-    template <Side Me> inline void updateThreatened();
-    template <Side Me> inline void updateCheckers();
-    template <Side Me, bool InCheck> inline void updatePinsAndCheckMask();
+    template <Color Me> inline void updateThreatened();
+    template <Color Me> inline void updateCheckers();
+    template <Color Me, bool InCheck> inline void updatePinsAndCheckMask();
 
     inline void updateBitboards();
-    template <Side Me> inline void updateBitboards();
+    template <Color Me> inline void updateBitboards();
 
-    Piece pieces[SQUARE_NB];         // Array of pieces on the board.
-    Bitboard sideBB[SIDE_NB];        // Bitboards for each side.
-    Bitboard piecesBB[PIECE_NB];     // Bitboards for each piece type.
-    Side sideToMove;                 // Side to move.
-    BoardState *state;               // Pointer to the current board state.
-    BoardState history[MAX_HISTORY]; // Array of board states for move history.
+    Piece pieces[SQUARE_NB];            // Array of pieces on the board.
+    Bitboard sideBB[COLOR_NB];          // Bitboards for each side.
+    Bitboard piecesBB[PIECE_NB];        // Bitboards for each piece type.
+    Color sideToMove;                   // Color to move.
+    BoardState *state;                  // Pointer to the current board state.
+    BoardState *history;    // Array of board states for move history.
 };
-
-std::ostream &operator<<(std::ostream &os, const Position &pos);
 
 
 // Checks to see if the position is a material draw.
@@ -168,7 +181,7 @@ inline bool Position::isMaterialDraw() const {
     if ((getPiecesBB(PAWN) | getPiecesBB(ROOK) | getPiecesBB(QUEEN)) ||
        (((getPiecesBB(WHITE, BISHOP) & LIGHT_SQUARES) && (getPiecesBB(WHITE, BISHOP) & DARK_SQUARES))  ||
         ((getPiecesBB(BLACK, BISHOP) & LIGHT_SQUARES) && (getPiecesBB(BLACK, BISHOP) & DARK_SQUARES))) ||
-       ((popcount(getPiecesBB(WHITE, KNIGHT)) < 3) || popcount(getPiecesBB(BLACK, KNIGHT)))) {
+       ((popcount(getPiecesBB(WHITE, KNIGHT)) < 3) || popcount(getPiecesBB(BLACK, KNIGHT)) < 3)) {
         return false;
     }
     return true;
@@ -201,7 +214,7 @@ inline bool Position::isRepetitionDraw() const {
 
 
 // Does the given move for the current position
-template <Side Me>
+template <Color Me>
 inline void Position::doMove(Move m) {
     switch (moveType(m)) {
         case NORMAL:     doMove<Me, NORMAL>(m);     return;
@@ -212,7 +225,7 @@ inline void Position::doMove(Move m) {
 }
 
 // Undoes the given move for the current position
-template <Side Me>
+template <Color Me>
 inline void Position::undoMove(Move m) {
     switch (moveType(m)) {
         case NORMAL:     undoMove<Me, NORMAL>(m);     return;
@@ -220,6 +233,31 @@ inline void Position::undoMove(Move m) {
         case PROMOTION:  undoMove<Me, PROMOTION>(m);  return;
         case EN_PASSANT: undoMove<Me, EN_PASSANT>(m); return;
     }
+}
+
+
+// Adds the piece to the position at the current square.
+// For making / unmaking moves, use the templated version of
+// this function instead, it will be much faster. This is just used
+// to debug evaluation.
+inline void Position::setPiece(Square sq, Piece p) {
+    Bitboard b = sqToBB(sq);
+    pieces[sq] = p;
+    sideBB[sideOf(p)]  |= b;
+    piecesBB[p] |= b;
+}
+
+
+// Removes the piece from the given square.
+// For making / unmaking moves, use the templated version of
+// this function instead, it will be much faster. This is just used
+// to debug evaluation.
+inline void Position::unsetPiece(Square sq) {
+    Bitboard b = sqToBB(sq);
+    Piece p = pieces[sq];
+    pieces[sq] = NO_PIECE;
+    sideBB[sideOf(p)]  &= ~b;
+    piecesBB[p] &= ~b;
 }
 
 void print_position(const Position &pos);

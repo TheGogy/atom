@@ -1,6 +1,6 @@
 
 #include "position.h"
-#include "bitboards.h"
+#include "bitboard.h"
 #include "types.h"
 #include "zobrist.h"
 #include "uci.h"
@@ -11,7 +11,7 @@
 
 namespace Atom {
 
-const std::string PIECE_TO_CHAR(" PNBRQK  pnbrqk");
+const std::string_view PIECE_TO_CHAR(" PNBRQK  pnbrqk");
 
 
 // Updates all the required bitboards for the current
@@ -23,7 +23,7 @@ inline void Position::updateBitboards() {
 
 // Updates all the required bitboards for the current
 // position. Call the non-templated version of this function instead.
-template<Side Me>
+template<Color Me>
 inline void Position::updateBitboards() {
     updateThreatened<Me>();
     updateCheckers<Me>();
@@ -34,9 +34,9 @@ inline void Position::updateBitboards() {
 // Updates the threatened squares for the current position.
 // These are all the squares that the opponent's pieces can
 // attack.
-template<Side Me>
+template<Color Me>
 inline void Position::updateThreatened() {
-    constexpr Side Opp = ~Me;
+    constexpr Color Opp = ~Me;
     const Bitboard occ = getPiecesBB() ^ getPiecesBB(Me, KING);
     Bitboard threatened, enemies;
 
@@ -88,9 +88,9 @@ inline void Position::updateThreatened() {
 //       . . . . . . . .     0 0 0 1 0 0 0 0
 //       . . . . . . . .     0 0 0 0 1 0 0 0
 //       . . . . . b . .     0 0 0 0 0 1 0 0
-template<Side Me, bool InCheck>
+template<Color Me, bool InCheck>
 inline void Position::updatePinsAndCheckMask() {
-    constexpr Side Opp = ~Me;
+    constexpr Color Opp = ~Me;
     const Square ksq = getKingSquare(Me);
     const Bitboard opp_occ = getPiecesBB(Opp);
     const Bitboard my_occ = getPiecesBB(Me);
@@ -147,10 +147,10 @@ inline void Position::updatePinsAndCheckMask() {
 //       . . . . . . . .     0 0 0 0 0 0 0 0
 //       . . . . . . . .     0 0 0 0 0 0 0 0
 //       . . . . . b . .     0 0 0 0 0 1 0 0
-template<Side Me>
+template<Color Me>
 inline void Position::updateCheckers() {
     const Square ksq = getKingSquare(Me);
-    constexpr Side Opp = ~Me;
+    constexpr Color Opp = ~Me;
     const Bitboard occ = getPiecesBB();
 
     state->checkers = ((pawnAttacks(Me, ksq) & getPiecesBB(Opp, PAWN))
@@ -221,12 +221,15 @@ Piece charToPiece(char c) {
 //       P P P P P P P P
 //       R N B Q K B N R
 Position::Position() {
+    history = new BoardState[MAX_HISTORY];
+    state = history;
     setFromFEN(STARTPOS_FEN);
 }
 
 
 // Creates a copy of another position.
 Position::Position(const Position &other) {
+    history = new BoardState[MAX_HISTORY];
     std::memcpy(this, &other, sizeof(Position));
     this->state = this->history + (other.state - other.history);
 }
@@ -234,10 +237,17 @@ Position::Position(const Position &other) {
 
 // Copy assignment operator
 Position& Position::operator=(const Position &other) {
+    if (this == &other) return *this; // Self assignment check
     std::memcpy(this, &other, sizeof(Position));
     this->state = this->history + (other.state - other.history);
 
     return *this;
+}
+
+
+// Destructor
+Position::~Position() {
+    delete[] history;
 }
 
 
@@ -376,7 +386,7 @@ std::string Position::fen() const {
         if (r > RANK_1) ss << '/';
     }
 
-    // Side to move
+    // Color to move
     ss << (sideToMove == WHITE ? " w " : " b ");
 
     // Castling rights
@@ -417,7 +427,7 @@ std::string Position::printable() const {
 
 
 // Adds the piece to the position at the current square
-template<Side Me>
+template<Color Me>
 inline void Position::setPiece(Square sq, Piece p) {
     Bitboard b = sqToBB(sq);
     pieces[sq] = p;
@@ -427,7 +437,7 @@ inline void Position::setPiece(Square sq, Piece p) {
 
 
 // Removes the piece from the given square.
-template<Side Me>
+template<Color Me>
 inline void Position::unsetPiece(Square sq) {
     Bitboard b = sqToBB(sq);
     Piece p = pieces[sq];
@@ -439,7 +449,7 @@ inline void Position::unsetPiece(Square sq) {
 
 // Moves the piece from the "from" square to the "to" square.
 // Moves should not be called with this function: use doMove instead.
-template<Side Me>
+template<Color Me>
 inline void Position::movePiece(Square from, Square to) {
     Bitboard fromTo = from | to;
     Piece p = pieces[from];
@@ -452,7 +462,7 @@ inline void Position::movePiece(Square from, Square to) {
 
 // Makes the given move in the current position and updates the position
 // accordingly.
-template<Side Me, MoveType Mt>
+template<Color Me, MoveType Mt>
 void Position::doMove(Move m) {
     const Square from = moveFrom(m);
     const Square to = moveTo(m);
@@ -472,6 +482,7 @@ void Position::doMove(Move m) {
     state->halfMoves = oldState->halfMoves + 1;
     state->captured = capture;
     state->move = m;
+    state->previous = oldState;
 
     if constexpr (Mt == NORMAL) {
         // Handle normal moves
@@ -586,7 +597,7 @@ template void Position::doMove<BLACK, CASTLING>(Move m);
 
 // Undoes the given move in the current position and updates the position
 // accordingly.
-template<Side Me, MoveType Mt>
+template<Color Me, MoveType Mt>
 void Position::undoMove(Move m) {
     const Square from = moveFrom(m);
     const Square to = moveTo(m);

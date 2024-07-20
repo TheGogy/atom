@@ -11,7 +11,7 @@ Bitboard zobrist_sideToMoveKey;
 
 Bitboard rand_u64() {
     // TODO: see if there is a better seed: this was chosen at random
-    static Bitboard seed = 0x4E4B705B92903BA4ull;
+    static uint64_t seed = 0x4E4B705B92903BA4ull;
 
     uint64_t val = (seed += 0x9E3779B97F4A7C15ull);
     val = (val ^ (val >> 30)) * 0xBF58476D1CE4E5B9ull;
