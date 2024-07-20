@@ -8,7 +8,7 @@
 
 namespace Atom {
 
-#define EvalFileDefaultNameBig "nn-ea8c9128c325.nnue"
+#define EvalFileDefaultNameBig "nn-68207f2da9ea.nnue"
 #define EvalFileDefaultNameSmall "nn-37f18f62d772.nnue"
 
 namespace NNUE {

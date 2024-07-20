@@ -12,8 +12,11 @@ Requires g++ compiler. Some parts (i.e memory) may only work on linux.
 ```bash
 git clone https://github.com/thegogy/atom
 cd atom
+wget https://tests.stockfishchess.org/api/nn/nn-68207f2da9ea.nnue # Big nnue
+wget https://tests.stockfishchess.org/api/nn/nn-37f18f62d772.nnue # Small nnue
 make release
 ```
+Ensure that the NNUE files are in the base directory (the same as this README) and *not* the src directory.
 
 ## Inspiration
 

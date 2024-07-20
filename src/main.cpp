@@ -17,12 +17,12 @@ void init_all() {
 int main (int argc, char *argv[]) {
     init_all();
     Position pos;
-    pos.setFromFEN(KIWIPETE_FEN);
+    // pos.setFromFEN(KIWIPETE_FEN);
     //
     print_position(pos);
-    testFromFile("tests/perft_massive.txt");
+    // testFromFile("tests/perft_massive.txt");
     //
-    // perft(pos, 5);
+    perft(pos, 6);
 
     return 0;
 }
