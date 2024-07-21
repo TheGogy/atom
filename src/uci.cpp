@@ -82,5 +82,27 @@ int Uci::toCentipawns(Value v, const Position &pos) {
     return std::round(100 * int(v) / a);
 }
 
+
+//
+// ------------------------------ < UCI main commands > ------------------------------
+//
+// ╔══════════════════════════════════╦══════════════════════════════════════════════╗
+// ║             Command              ║         Response (* means blocking)          ║
+// ╠══════════════════════════════════╬══════════════════════════════════════════════╣
+// ║ uci                              ║   uciok <engine name, authors, options>      ║
+// ║ isready                          ║ * readyok                                    ║
+// ║ ucinewgame                       ║ * (resets the TT and all position variables) ║
+// ║ setoption name <opt> value <val> ║ * (sets the option <opt> to the value <val>  ║
+// ║ go (wtime, btime etc)            ║ * (Searches current position)                ║
+// ║ stop                             ║   Finish search threads and report bestmove  ║
+// ║ quit                             ║   Kills the engine process                   ║
+// ║ perft <d>                        ║   Runs perft on current pos up to depth <d>  ║
+// ║ debug (or just "d")              ║   Prints the current position + debug info   ║
+// ║ moves (or just "m")              ║   Prints the moves available in the current  ║
+// ╚══════════════════════════════════╩══════════════════════════════════════════════╝
+
+
+
+
 } // namespace Atom
 

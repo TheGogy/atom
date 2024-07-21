@@ -5,14 +5,16 @@
 
 namespace Atom {
 
+namespace Zobrist {
+extern Bitboard keys[PIECE_NB][SQUARE_NB];
+extern Bitboard enpassantKeys[FILE_NB+1];
+extern Bitboard castlingKeys[CASTLING_RIGHT_NB];
+extern Bitboard sideToMoveKey;
 
-extern Bitboard zobrist_keys[PIECE_NB][SQUARE_NB];
-extern Bitboard zobrist_enpassantKeys[FILE_NB+1];
-extern Bitboard zobrist_castlingKeys[CASTLING_RIGHT_NB];
-extern Bitboard zobrist_sideToMoveKey;
+void init();
 
-void init_zobrist();
+} // namespace Zobrist
 
-} // namespace atom
+} // namespace Atom
 
 #endif

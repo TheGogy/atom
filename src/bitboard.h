@@ -7,9 +7,9 @@
 namespace Atom {
 
 // Bitboard utilities
-#define get_bit(bitboard, square) ((bitboard) &   (1ULL << (square)))
-#define set_bit(bitboard, square) ((bitboard) |=  (1ULL << (square)))
-#define pop_bit(bitboard, square) ((bitboard) &= ~(1ULL << (square)))
+#define getBit(bitboard, square) ((bitboard) &   (1ULL << (square)))
+#define setBit(bitboard, square) ((bitboard) |=  (1ULL << (square)))
+#define popBit(bitboard, square) ((bitboard) &= ~(1ULL << (square)))
 
 
 #define bitloop(bb) for(; bb; bb &= bb - 1)
@@ -22,7 +22,7 @@ namespace Atom {
 #define pext(bb, mask) _pext_u64(bb, mask)
 
 
-void init_bbs();
+void initBBs();
 void print_bb(const Bitboard bb);
 
 

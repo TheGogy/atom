@@ -41,7 +41,7 @@ void HalfKAv2_hm::append_active_indices(const Position& pos, IndexList& active) 
     Bitboard bb  = pos.getPiecesBB();
     bitloop (bb) {
       Square s = bitscan(bb);
-      active.push(make_index<Perspective>(s, pos.getPieceAt(s), ksq));
+      active.push_back(make_index<Perspective>(s, pos.getPieceAt(s), ksq));
     }
 }
 
@@ -60,9 +60,9 @@ void HalfKAv2_hm::append_changed_indices(Square            ksq,
     for (int i = 0; i < dp.dirty_num; ++i)
     {
         if (dp.from[i] != SQ_NONE)
-            removed.push(make_index<Perspective>(dp.from[i], dp.piece[i], ksq));
+            removed.push_back(make_index<Perspective>(dp.from[i], dp.piece[i], ksq));
         if (dp.to[i] != SQ_NONE)
-            added.push(make_index<Perspective>(dp.to[i], dp.piece[i], ksq));
+            added.push_back(make_index<Perspective>(dp.to[i], dp.piece[i], ksq));
     }
 }
 

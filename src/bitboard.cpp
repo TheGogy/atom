@@ -25,7 +25,7 @@ void print_bb(const Bitboard bb) {
         std::cout << " " << rank + 1 << "│";
         for (int file = 0; file < 8; file++) {
             sq = rank * 8 + file;
-            if (get_bit(bb, sq))
+            if (getBit(bb, sq))
                 std::cout << "# ";
             else
                 std::cout << "· ";
@@ -74,7 +74,7 @@ template <PieceType Pt> Bitboard slidingAttacks(Square sq, Bitboard occupied) {
 
 // Initializes the PEXT lookup table for a given sliding piece.
 template<PieceType Pt>
-void init_pext(Square s, Bitboard table[], PextEntry magics[]) {
+void initPext(Square s, Bitboard table[], PextEntry magics[]) {
     static int size = 0;
     Bitboard edges, occ;
 
@@ -101,14 +101,14 @@ void init_pext(Square s, Bitboard table[], PextEntry magics[]) {
 
 
 // Initializes the pawn attack lookups.
-inline void init_pawn_attacks(Square s, Bitboard bb) {
+inline void initPawnAttacks(Square s, Bitboard bb) {
     PAWN_ATTACK[WHITE][s] = shift<NORTH_WEST>(bb) | shift<NORTH_EAST>(bb);
     PAWN_ATTACK[BLACK][s] = shift<SOUTH_EAST>(bb) | shift<SOUTH_WEST>(bb);
 }
 
 
 // Initializes the knight move lookups.
-inline void init_knight_move(Square s, Bitboard bb) {
+inline void initKnightMoves(Square s, Bitboard bb) {
     KNIGHT_MOVE[s] = shift<NORTH_WEST>(shift<NORTH>(bb)) | shift<NORTH_EAST>(shift<NORTH>(bb))
                    | shift<NORTH_EAST>(shift<EAST>(bb))  | shift<SOUTH_EAST>(shift<EAST>(bb))
                    | shift<SOUTH_EAST>(shift<SOUTH>(bb)) | shift<SOUTH_WEST>(shift<SOUTH>(bb))
@@ -117,7 +117,7 @@ inline void init_knight_move(Square s, Bitboard bb) {
 
 
 // Initializes the king move lookups.
-inline void init_king_move(Square s, Bitboard bb) {
+inline void initKingMoves(Square s, Bitboard bb) {
     KING_MOVE[s] = shift<NORTH>(bb) | shift<SOUTH>(bb) | shift<EAST>(bb) | shift<WEST>(bb)
                  | shift<NORTH_EAST>(bb) | shift<NORTH_WEST>(bb) | shift<SOUTH_EAST>(bb) | shift<SOUTH_WEST>(bb);
 }
@@ -134,7 +134,7 @@ inline void init_king_move(Square s, Bitboard bb) {
 // 0 0 0 0 0 0 0 0
 // 0 0 0 0 0 0 0 0
 // 0 0 0 0 0 0 0 0
-inline void init_between_bb(Square x, Bitboard bb_x) {
+inline void initBetweenBB(Square x, Bitboard bb_x) {
     Bitboard bb_y;
     for (Square y = SQ_ZERO; y < SQUARE_NB; ++y) {
         bb_y = sqToBB(y);
@@ -149,15 +149,15 @@ inline void init_between_bb(Square x, Bitboard bb_x) {
 
 // Initializes all lookups. This should be called as early as possible
 // when starting the program.
-void init_bbs() {
+void initBBs() {
     for (Square s = SQ_ZERO; s < SQUARE_NB; ++s) {
         Bitboard bb = sqToBB(s);
-        init_pawn_attacks(s, bb);
-        init_knight_move(s, bb);
-        init_king_move(s, bb);
-        init_between_bb(s, bb);
-        init_pext<ROOK>(s, ROOK_DATA, ROOK_MOVE);
-        init_pext<BISHOP>(s, BISHOP_DATA, BISHOP_MOVE);
+        initPawnAttacks(s, bb);
+        initKnightMoves(s, bb);
+        initKingMoves(s, bb);
+        initBetweenBB(s, bb);
+        initPext<ROOK>(s, ROOK_DATA, ROOK_MOVE);
+        initPext<BISHOP>(s, BISHOP_DATA, BISHOP_MOVE);
     }
 
 }

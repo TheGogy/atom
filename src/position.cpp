@@ -169,12 +169,12 @@ Bitboard Position::computeHash() const {
         Piece p = getPieceAt(sq);
         if (p == NO_PIECE) continue;
 
-        hash ^= zobrist_keys[p][sq];
+        hash ^= Zobrist::keys[p][sq];
     }
 
-    hash ^= zobrist_castlingKeys[getCastlingRights()];
-    if (getEpSquare() != SQ_NONE) hash ^= zobrist_enpassantKeys[fileOf(getEpSquare())];
-    if (getSideToMove() == BLACK) hash ^= zobrist_sideToMoveKey;
+    hash ^= Zobrist::castlingKeys[getCastlingRights()];
+    if (getEpSquare() != SQ_NONE) hash ^= Zobrist::enpassantKeys[fileOf(getEpSquare())];
+    if (getSideToMove() == BLACK) hash ^= Zobrist::sideToMoveKey;
 
     return hash;
 }
@@ -467,12 +467,12 @@ void Position::doMove(Move m) {
     const Square from = moveFrom(m);
     const Square to = moveTo(m);
     const Piece p = getPieceAt(from);
-    const Piece capture = getPieceAt(to);
+    const Piece captured = getPieceAt(to);
 
     uint64_t hash = state->hash;
 
     // Update the hash to remove en passant square
-    hash ^= zobrist_enpassantKeys[fileOf(state->epSquare) + FILE_NB * (state->epSquare == SQ_NONE)];
+    hash ^= Zobrist::enpassantKeys[fileOf(state->epSquare) + FILE_NB * (state->epSquare == SQ_NONE)];
 
     // Copy current state to next state
     BoardState *oldState = state++;
@@ -480,105 +480,154 @@ void Position::doMove(Move m) {
     state->castlingRights = oldState->castlingRights;
     state->fiftyMoveRule = oldState->fiftyMoveRule + 1;
     state->halfMoves = oldState->halfMoves + 1;
-    state->captured = capture;
+    state->captured = captured;
     state->move = m;
     state->previous = oldState;
 
+    // NNUE
+    state->accumulatorBig.computed[WHITE] = state->accumulatorBig.computed[BLACK] =
+        state->accumulatorSmall.computed[WHITE] = state->accumulatorSmall.computed[BLACK] = false;
+
+    DirtyPiece& dp = state->dirtyPiece;
+
     if constexpr (Mt == NORMAL) {
         // Handle normal moves
-        if (capture != NO_PIECE) {
-            // Update hash for the captured piece
-            hash ^= zobrist_keys[capture][to];
-            // Remove the captured piece
+
+        dp.dirty_num = 1;
+        dp.piece[0] = p;
+        dp.from[0]  = from;
+        dp.to[0]    = to;
+
+        if (captured != NO_PIECE) {
+            hash ^= Zobrist::keys[captured][to];
             unsetPiece<~Me>(to);
-            // Reset the fifty-move rule counter
             state->fiftyMoveRule = 0;
+
+            dp.dirty_num = 2;
+            dp.piece[1]  = captured;
+            dp.from[1]   = to;
+            dp.to[1]     = SQ_NONE;
         }
 
-        // Update hash for the moving piece
-        hash ^= zobrist_keys[p][from] ^ zobrist_keys[p][to];
-        // Move the piece on the board
+        hash ^= Zobrist::keys[p][from] ^ Zobrist::keys[p][to];
         movePiece<Me>(from, to);
 
-        // Update castling rights
-        hash ^= zobrist_castlingKeys[state->castlingRights];
+        hash ^= Zobrist::castlingKeys[state->castlingRights];
         state->castlingRights &= ~(CastlingRightsMask[from] | CastlingRightsMask[to]);
-        hash ^= zobrist_castlingKeys[state->castlingRights];
+        hash ^= Zobrist::castlingKeys[state->castlingRights];
 
         // Special handling for pawn moves
         if (p == makePiece(Me, PAWN)) {
             state->fiftyMoveRule = 0;
 
-            // Set en passant square on double pawn push
             if ((int(from) ^ int(to)) == int(NORTH + NORTH)) {
                 const Square epsq = to - pawnDirection(Me);
 
-                // Check if opponent pawn can capture en passant
                 if (pawnAttacks(Me, epsq) & getPiecesBB(~Me, PAWN)) {
-                    hash ^= zobrist_enpassantKeys[fileOf(epsq)];
+                    hash ^= Zobrist::enpassantKeys[fileOf(epsq)];
                     state->epSquare = epsq;
                 }
             }
         }
+
     } else if constexpr (Mt == CASTLING) {
         // Handle castling moves
         CastlingRight cr = Me & (to > from ? KING_SIDE : QUEEN_SIDE);
         const Square rookFrom = CastlingRookFrom[cr];
         const Square rookTo = CastlingRookTo[cr];
 
-        // Update hash for the king and rook moves
-        hash ^= zobrist_keys[makePiece(Me, KING)][from] ^ zobrist_keys[makePiece(Me, KING)][to];
-        hash ^= zobrist_keys[makePiece(Me, ROOK)][rookFrom] ^ zobrist_keys[makePiece(Me, ROOK)][rookTo];
+        dp.dirty_num = 2;
 
-        // Move the king and rook on the board
+        dp.piece[0] = makePiece(Me, KING);
+        dp.from[0]  = from;
+        dp.to[0]    = to;
+
+        dp.piece[1] = makePiece(Me, ROOK);
+        dp.from[1]  = rookFrom;
+        dp.to[1]    = rookTo;
+
+        hash ^= Zobrist::keys[makePiece(Me, KING)][from] ^ Zobrist::keys[makePiece(Me, KING)][to];
+        hash ^= Zobrist::keys[makePiece(Me, ROOK)][rookFrom] ^ Zobrist::keys[makePiece(Me, ROOK)][rookTo];
+
         movePiece<Me>(from, to);
         movePiece<Me>(rookFrom, rookTo);
 
         // Update castling rights
-        hash ^= zobrist_castlingKeys[state->castlingRights];
+        hash ^= Zobrist::castlingKeys[state->castlingRights];
         state->castlingRights &= ~(CastlingRightsMask[from] | CastlingRightsMask[to]);
-        hash ^= zobrist_castlingKeys[state->castlingRights];
+        hash ^= Zobrist::castlingKeys[state->castlingRights];
+
     } else if constexpr (Mt == PROMOTION) {
         // Handle pawn promotion moves
         const PieceType promotionType = movePromotionType(m);
+        const Piece piecePromotedTo = makePiece(Me, promotionType);
 
-        // Update hash for the captured piece
-        if (capture != NO_PIECE) {
-            hash ^= zobrist_keys[capture][to];
-            // Remove the captured piece
+        // Don't set dirty num here: we set it later, as it depends on captures
+        dp.piece[0] = makePiece(Me, PAWN);
+        dp.from[0]  = from;
+        dp.to[0]    = SQ_NONE;
+
+        if (captured != NO_PIECE) {
+            // Capture promotion
+            hash ^= Zobrist::keys[captured][to];
             unsetPiece<~Me>(to);
+
+            // Pawn and captured piece go to none, piecePromotedTo goes to sq, so 3 pieces moved
+            dp.dirty_num = 3;
+
+            dp.piece[1]  = captured;
+            dp.from[1]   = to;
+            dp.to[1]     = SQ_NONE;
+
+            dp.piece[2]  = piecePromotedTo;
+            dp.from[2]   = SQ_NONE;
+            dp.to[2]     = to;
+
+        } else {
+            // Regular promotion
+            dp.dirty_num = 2;
+
+            dp.piece[1]  = piecePromotedTo;
+            dp.from[1]   = SQ_NONE;
+            dp.to[1]     = to;
         }
 
-        // Update hash for the pawn and promoted piece
-        hash ^= zobrist_keys[makePiece(Me, PAWN)][from] ^ zobrist_keys[makePiece(Me, promotionType)][to];
-        // Remove the pawn and set the promoted piece
+        hash ^= Zobrist::keys[makePiece(Me, PAWN)][from] ^ Zobrist::keys[piecePromotedTo][to];
+
         unsetPiece<Me>(from);
-        setPiece<Me>(to, makePiece(Me, promotionType));
-        // Reset the fifty-move rule counter
+        setPiece<Me>(to, piecePromotedTo);
+
         state->fiftyMoveRule = 0;
 
-        // Update castling rights
-        hash ^= zobrist_castlingKeys[state->castlingRights];
+        hash ^= Zobrist::castlingKeys[state->castlingRights];
         state->castlingRights &= ~(CastlingRightsMask[from] | CastlingRightsMask[to]);
-        hash ^= zobrist_castlingKeys[state->castlingRights];
+        hash ^= Zobrist::castlingKeys[state->castlingRights];
+
     } else if constexpr (Mt == EN_PASSANT) {
         // Handle en passant captures
         const Square epsq = to - pawnDirection(Me);
 
-        // Update hash for the captured pawn and the moving pawn
-        hash ^= zobrist_keys[makePiece(~Me, PAWN)][epsq];
-        hash ^= zobrist_keys[makePiece(Me, PAWN)][from] ^ zobrist_keys[makePiece(Me, PAWN)][to];
+        dp.dirty_num = 2;
 
-        // Remove the captured pawn and move the capturing pawn
+        dp.piece[0]  = makePiece(Me, PAWN);
+        dp.from[0]   = from;
+        dp.to[0]     = to;
+
+        dp.piece[1]  = makePiece(~Me, PAWN);
+        dp.from[1]   = epsq;
+        dp.to[1]     = SQ_NONE;
+
+        hash ^= Zobrist::keys[makePiece(~Me, PAWN)][epsq];
+        hash ^= Zobrist::keys[makePiece(Me, PAWN)][from] ^ Zobrist::keys[makePiece(Me, PAWN)][to];
+
         unsetPiece<~Me>(epsq);
         movePiece<Me>(from, to);
 
-        // Reset the fifty-move rule counter
         state->fiftyMoveRule = 0;
     }
 
     // Update hash for the side to move
-    hash ^= zobrist_sideToMoveKey;
+    hash ^= Zobrist::sideToMoveKey;
     state->hash = hash;
     sideToMove = ~Me;
     updateBitboards<~Me>();
@@ -646,7 +695,7 @@ template void Position::undoMove<BLACK, CASTLING>(Move m);
 
 // Prints the current position and all its metadata to stdout.
 // Used for debugging purposes.
-void print_position(const Position &pos) {
+void printPosition(const Position &pos) {
     std::cout << pos.printable() << std::endl << std::endl;
     std::cout << "FEN:            " << pos.fen() << std::endl;
     std::cout << "Hash:           " << pos.hash() << std::endl;

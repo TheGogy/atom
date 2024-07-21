@@ -1,6 +1,8 @@
 #!/bin/sh
 
-if grep -q "avx512f" /proc/cpuinfo; then
+if grep -q "avx512_vnni" /proc/cpuinfo; then
+  echo "VNNI512FLAGS"
+elif grep -q "avx512f" /proc/cpuinfo; then
   echo "AVX512FLAGS"
 elif grep -q "bmi2" /proc/cpuinfo; then
   echo "BMI2FLAGS"

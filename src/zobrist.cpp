@@ -1,13 +1,16 @@
 
 #include <cstdint>
 #include "zobrist.h"
+#include "types.h"
 
 namespace Atom {
 
-Bitboard zobrist_keys[PIECE_NB][SQUARE_NB];
-Bitboard zobrist_enpassantKeys[FILE_NB+1];
-Bitboard zobrist_castlingKeys[CASTLING_RIGHT_NB];
-Bitboard zobrist_sideToMoveKey;
+namespace Zobrist {
+
+Bitboard keys[PIECE_NB][SQUARE_NB];
+Bitboard enpassantKeys[FILE_NB+1];
+Bitboard castlingKeys[CASTLING_RIGHT_NB];
+Bitboard sideToMoveKey;
 
 Bitboard rand_u64() {
     // TODO: see if there is a better seed: this was chosen at random
@@ -19,23 +22,25 @@ Bitboard rand_u64() {
     return val ^ (val >> 31);
 }
 
-void init_zobrist() {
-    for (int i=0; i<PIECE_NB; i++) {
-        for (int j=0; j<SQUARE_NB; j++) {
-            zobrist_keys[i][j] = rand_u64();
+void init() {
+    for (Piece i = W_PAWN; i < PIECE_NB; ++i) {
+        for (Square j = SQ_A1; j < SQUARE_NB; ++j) {
+            keys[i][j] = rand_u64();
         }
     }
 
-    for (int i=0; i<CASTLING_RIGHT_NB; i++) {
-        zobrist_castlingKeys[i] = rand_u64();
+    for (int i = 0; i < CASTLING_RIGHT_NB; ++i) {
+        castlingKeys[i] = rand_u64();
     }
 
-    for (int i=0; i<FILE_NB; i++) {
-        zobrist_enpassantKeys[i] = rand_u64();
+    for (File i = FILE_A; i < FILE_NB; ++i) {
+        enpassantKeys[i] = rand_u64();
     }
-    zobrist_enpassantKeys[FILE_NB] = 0;
+    enpassantKeys[FILE_NB] = 0;
 
-    zobrist_sideToMoveKey = rand_u64();
+    sideToMoveKey = rand_u64();
 }
+
+} // namespace Zobrist
 
 } // namespace Atom
