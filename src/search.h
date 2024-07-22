@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <vector>
 
 #include "types.h"
 
@@ -17,10 +18,10 @@ inline TimePoint now() {
 }
 
 struct SearchLimits {
+    std::vector<std::string> searchMoves;
     TimePoint time[COLOR_NB], inc[COLOR_NB];
     TimePoint startTimePoint, moveTime;
-    bool canPonder;
-    bool infinite;
+    bool canPonder, isInfinite;
     uint64_t nodes;
     int depth, mate, movesToGo;
 };

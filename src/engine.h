@@ -1,13 +1,28 @@
 #ifndef ENGINE_H
 #define ENGINE_H
 
+#include <cstddef>
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 #include "bitboard.h"
 #include "nnue/network.h"
+#include "search.h"
+#include "types.h"
 
 namespace Atom {
+
+struct EngineInfo {
+    int depth;
+    int selDepth;
+    size_t timeSearched;
+    size_t nodesSearched;
+    std::string_view pv;
+    Value score;
+    int hashFull;
+};
+
 
 class Engine {
 public:
@@ -31,12 +46,14 @@ public:
     std::string visualizeThreatened() { return visualizeBB(pos.threatened()); }
 
     // NNUE
-    void loadNetworks();                                // Loads NNUE networks
-    void loadBigNetFromFile(const std::string& path);   // Loads big NNUE from file
-    void loadSmallNetFromFile(const std::string& path); // Loads small NNUE from file
-    void verifyNetworks();                              // Verify current NNUE networks
+    void loadNetworks();
+    void loadBigNetFromFile(const std::string& path);
+    void loadSmallNetFromFile(const std::string& path);
+    void verifyNetworks();
 
-    void stop();    // Stops everything ready to be shut down
+    // Runs respective UCI commands
+    void go(SearchLimits limits);
+    void stop();
 
 private:
     Position pos;

@@ -4,6 +4,7 @@
 #include "nnue/network.h"
 #include "perft.h"
 #include "position.h"
+#include "search.h"
 #include "types.h"
 #include "uci.h"
 
@@ -85,7 +86,7 @@ void Engine::verifyNetworks() {
 
 
 // Loads respective networks from file
-// HACK: This assumes NNUE files do not contain / or \.
+// HACK: This assumes the names of the NNUE files themselves do not contain / or \.
 void Engine::loadBigNetFromFile(const std::string& path) {
     size_t n = path.find_last_of("/\\");
     networks.big.load(path.substr(0, n), path.substr(n + 1));
@@ -93,6 +94,15 @@ void Engine::loadBigNetFromFile(const std::string& path) {
 void Engine::loadSmallNetFromFile(const std::string& path) {
     size_t n = path.find_last_of("/\\");
     networks.small.load(path.substr(0, n), path.substr(n + 1));
+}
+
+//
+//  UCI engine related commands
+//  For more info, see uci.cpp
+//
+
+void Engine::go(SearchLimits limits) {
+    // TODO: Find the best move!
 }
 
 

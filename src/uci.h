@@ -3,6 +3,7 @@
 
 #include <sstream>
 #include <string>
+#include <string_view>
 
 #include "engine.h"
 #include "position.h"
@@ -19,15 +20,18 @@ public:
 
     static std::string toLower(std::string s);
 
+    // Helper functions
     static Square parseSquare(std::string str); // Parse square
     static Move parseMove(std::string str);     // Parse move
-
     static std::string formatSquare(Square sq); // Format square
     static std::string formatMove(Move m);      // Format move
-
-    static Move toMove(const Position& pos, std::string moveStr);
+    static Move toMove(const Position& pos, std::string moveStr); // Get Move from string
 
     static int toCentipawns(Value v, const Position &pos);
+
+    // Callbacks for engine
+    static void callbackBestMove(const std::string_view bestmove, const std::string_view ponder);
+    static void callbackInfo(const EngineInfo info);
 
 private:
     Engine engine;

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <sstream>
+#include <string_view>
 
 #include "uci.h"
 #include "movegen.h"
@@ -114,39 +115,36 @@ int Uci::toCentipawns(Value v, const Position &pos) {
 }
 
 
-SearchLimits Uci::parseGoLimits(std::istringstream& is) {
-    SearchLimits limits;
-    std::string token;
+//
+// UCI callbacks
+//
 
-    limits.startTimePoint = now();
-
-    while (is >> token) {
-        if (token == "wtime") {
-            is >> limits.time[WHITE];
-        } else if (token == "btime") {
-            is >> limits.time[BLACK];
-        } else if (token == "winc") {
-            is >> limits.inc[WHITE];
-        } else if (token == "binc") {
-            is >> limits.inc[BLACK];
-        } else if (token == "movestogo") {
-            is >> limits.movesToGo;
-        } else if (token == "depth") {
-            is >> limits.depth;
-        } else if (token == "nodes") {
-            is >> limits.nodes;
-        } else if (token == "mate") {
-            is >> limits.mate;
-        } else if (token == "movetime") {
-            is >> limits.moveTime;
-        } else if (token == "infinite") {
-            limits.infinite = true;
-        }
-    }
-
-    return limits;
+void Uci::callbackBestMove(const std::string_view bestmove, const std::string_view ponder) {
+    std::cout << "bestmove " << bestmove;
+    if (!ponder.empty()) std::cout << " ponder " << ponder;
+    std::cout << std::endl;
 }
 
+
+void Uci::callbackInfo(const EngineInfo info) {
+    std::stringstream ss;
+
+    ss << "info";
+    ss << " depth "    << info.depth
+       << " seldepth " << info.selDepth
+       << " score "    << info.score
+       << " nodes "    << info.nodesSearched
+       << " nps "      << (info.nodesSearched * 1000) / info.timeSearched
+       << " hashfull " << info.hashFull
+       << " time "     << info.timeSearched
+       << " pv "       << info.pv;
+
+    std::cout << ss.str() << std::endl;
+}
+
+//
+//  Main UCI loop.
+//
 
 void Uci::loop() {
     std::string token, input;
@@ -295,15 +293,52 @@ void Uci::cmdSetOption(std::istringstream& is) {
     }
 }
 
+SearchLimits Uci::parseGoLimits(std::istringstream& is) {
+    SearchLimits limits;
+    std::string token;
+
+    limits.startTimePoint = now();
+
+    while (is >> token) {
+        if (token == "searchmoves") {           // Restrict search to specific moves.
+            while (is >> token) limits.searchMoves.push_back(toLower(token));
+
+        } else if (token == "wtime") {          // White has <x> ms left on clock
+            is >> limits.time[WHITE];
+        } else if (token == "btime") {          // Black has <x> ms left on clock
+            is >> limits.time[BLACK];
+        } else if (token == "winc") {           // White has <x> ms increment
+            is >> limits.inc[WHITE];
+        } else if (token == "binc") {           // Black has <x> ms increment
+            is >> limits.inc[BLACK];
+        } else if (token == "movestogo") {      // There are <x> ms until next time control
+            is >> limits.movesToGo;
+        } else if (token == "depth") {          // Search up to depth <x>
+            is >> limits.depth;
+        } else if (token == "nodes") {          // Search only <x> nodes
+            is >> limits.nodes;
+        } else if (token == "mate") {           // Search for mate in <x> moves
+            is >> limits.mate;
+        } else if (token == "movetime") {       // Search for <x> milliseconds
+            is >> limits.moveTime;
+        } else if (token == "infinite") {       // Search infinitely until stop command called
+            limits.isInfinite = true;
+        }
+    }
+
+    return limits;
+}
+
 
 void Uci::cmdGo(std::istringstream& is) {
     SearchLimits limits = parseGoLimits(is);
-    std::cout << "limits: " << limits.time[WHITE] << std::endl;
+    engine.go(limits);
 }
 
 
 void Uci::cmdStop() {
-    // TODO: Stop the engine and return bestmove
+    // TODO: return bestmove
+    engine.stop();
 }
 
 

@@ -119,9 +119,8 @@ public:
     inline Bitboard pinOrtho()   const { return state->pinOrtho; }
     inline Bitboard threatened() const { return state->attacked; }
     inline Bitboard checkers()   const { return state->checkers; }
-    inline Bitboard nCheckers() const { return popcount(state->checkers); }
+    inline Bitboard nCheckers()  const { return popcount(state->checkers); }
     inline bool inCheck()        const { return !!state->checkers; }
-
 
     // Compute / get the hash of the current position.
     uint64_t computeHash() const;
