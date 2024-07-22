@@ -7,6 +7,7 @@
 #include "movegen.h"
 #include "nnue.h"
 #include "position.h"
+#include "search.h"
 #include "types.h"
 
 namespace Atom {
@@ -113,6 +114,40 @@ int Uci::toCentipawns(Value v, const Position &pos) {
 }
 
 
+SearchLimits Uci::parseGoLimits(std::istringstream& is) {
+    SearchLimits limits;
+    std::string token;
+
+    limits.startTimePoint = now();
+
+    while (is >> token) {
+        if (token == "wtime") {
+            is >> limits.time[WHITE];
+        } else if (token == "btime") {
+            is >> limits.time[BLACK];
+        } else if (token == "winc") {
+            is >> limits.inc[WHITE];
+        } else if (token == "binc") {
+            is >> limits.inc[BLACK];
+        } else if (token == "movestogo") {
+            is >> limits.movesToGo;
+        } else if (token == "depth") {
+            is >> limits.depth;
+        } else if (token == "nodes") {
+            is >> limits.nodes;
+        } else if (token == "mate") {
+            is >> limits.mate;
+        } else if (token == "movetime") {
+            is >> limits.moveTime;
+        } else if (token == "infinite") {
+            limits.infinite = true;
+        }
+    }
+
+    return limits;
+}
+
+
 void Uci::loop() {
     std::string token, input;
 
@@ -150,22 +185,20 @@ void Uci::loop() {
         } else {
             std::cout << "Error: unknown command '" << token << "'" << std::endl;
         }
-
     }
 }
 
 
-//
 // ------------------------------ < UCI main commands > ------------------------------
 //
 // +-----------------------------------+----------------------------------------------+
 // |             Command               |         Response (* means blocking)          |
 // +-----------------------------------+----------------------------------------------+
 // | uci                               |   uciok <engine name, authors, options>      |
-// | isready                           | * responds with "readyok"                    |
-// | ucinewgame                        | * resets the TT and all position variables   |
-// | position <fen / startpos> <moves> | * sets the position according to FEN / moves |
-// | setoption name <opt> value <val>  | * sets the option <opt> to the value <val>   |
+// | isready                           | * Responds with "readyok"                    |
+// | ucinewgame                        | * Resets the TT and all position variables   |
+// | position <fen / startpos> <moves> | * Sets the position according to FEN / moves |
+// | setoption name <opt> value <val>  | * Sets the option <opt> to the value <val>   |
 // | go (wtime, btime etc)             | * Searches current position                  |
 // | stop                              |   Finish search threads and report bestmove  |
 // | perft <depth>                     |   Runs perft on current pos to given depth   |
@@ -173,6 +206,7 @@ void Uci::loop() {
 // | quit                              |   Ends the process                           |
 // | clear                             |   Clears the terminal                        |
 // | visualize (or just "v") <bb>      |   Prints a visualization of bitboard <bb>    |
+// | eval                              |   Traces the evaluation of the current pos   |
 // +-----------------------------------+----------------------------------------------+
 
 
@@ -263,12 +297,13 @@ void Uci::cmdSetOption(std::istringstream& is) {
 
 
 void Uci::cmdGo(std::istringstream& is) {
-    // TODO: Choose a random move for debugging
+    SearchLimits limits = parseGoLimits(is);
+    std::cout << "limits: " << limits.time[WHITE] << std::endl;
 }
 
 
 void Uci::cmdStop() {
-    // TODO: Stop the engine
+    // TODO: Stop the engine and return bestmove
 }
 
 

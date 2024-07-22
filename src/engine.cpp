@@ -20,7 +20,6 @@ Engine::Engine() :
         )
     ) {
     loadNetworks();
-    verifyNetworks();
 }
 
 

@@ -6,6 +6,7 @@
 
 #include "engine.h"
 #include "position.h"
+#include "search.h"
 #include "types.h"
 
 namespace Atom {
@@ -30,6 +31,8 @@ public:
 
 private:
     Engine engine;
+
+    SearchLimits parseGoLimits(std::istringstream& is);
 
     // UCI commands
     void cmdUci();
