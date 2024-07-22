@@ -6,6 +6,7 @@
 
 namespace Atom {
 
+
 #define ENUMERATE_MOVES(...) if (!__VA_ARGS__) return false
 #define HANDLE_MOVE(...)     if (!handler(__VA_ARGS__)) return false
 
@@ -30,7 +31,10 @@ inline bool enumeratePromotion(Square from, Square to, const Handler& handler) {
 }
 
 
-// Enumerate all promotion moves for a single pawn
+// Enumerate all promotion moves for a single pawn.
+// This is for all piece types.
+// Queens are regarded as tactical;
+// Rooks, Knights and Bishops are regarded as quiet.
 template<Color Me, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumeratePromotions(Square from, Square to, const Handler& handler) {
     if constexpr (MGType & TACTICAL_MOVES) {
@@ -48,6 +52,7 @@ inline bool enumeratePromotions(Square from, Square to, const Handler& handler) 
 
 
 // Enumerates all pawn promotion moves, including checks.
+// This is for all pawns on the promotion rank.
 template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumeratePawnPromotionMoves(const Position &pos, Bitboard source, const Handler& handler) {
     constexpr Color Opp = ~Me;
@@ -64,10 +69,7 @@ inline bool enumeratePawnPromotionMoves(const Position &pos, Bitboard source, co
     const Bitboard checkMask = pos.checkMask();
 
     // Promoting pawns are pawns that are on the 7th rank.
-    // They also cannot be orthogonally pinned as those pawns cannot promote:
-    // they are stopped by the king they are pinned to, or;
-    // they are stopped by the pinning piece.
-    // They cannot take, as that would make them leave the pinmask.
+    // Orthogonally pinned pawns cannot promote.
     // https://lichess.org/editor/3K4/3P4/8/8/3r1k2/8/8/8_w_-_-_0_1?color=white
     // https://lichess.org/editor/3rn3/3P1k2/8/8/3K4/8/8/8_w_-_-_0_1?color=white
     const Bitboard pawnsCanPromote = source & Rank7 & ~pinOrtho;
@@ -139,8 +141,8 @@ inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, co
         Bitboard enpassants = pawnAttacks(Opp, pos.getEpSquare()) & source & ~pinOrtho;
 
         if constexpr (InCheck) {
-            // If we are in check, we should only add the checkmask if it is not the
-            // en passant piece putting us in check, as the en passant piece is not in the checkmask.
+            // If we are in check, we should only add the checkmask if it is not the e.p.
+            // piece putting us in check, as the en passant piece is not in the checkmask.
             if (!(pos.checkers() & epcaptured)) {
                 enpassants &= checkMask;
             }
@@ -335,6 +337,7 @@ inline bool enumerateBishopSliderMoves(const Position &pos, Bitboard source, con
 
     // Orthogonally pinned bishops + queens cannot move (diagonally),
     // as that would make them get out of the pinmask.
+    // https://lichess.org/editor/8/4k3/8/2K1B1r1/8/8/8/8_w_-_-_0_1?color=white
     const Bitboard bqCanMove = source & ~pos.pinOrtho();
 
     Bitboard pieces;
@@ -361,6 +364,7 @@ inline bool enumerateBishopSliderMoves(const Position &pos, Bitboard source, con
         Square from = bitscan(pieces);
 
         // Diagonally pinned bishops + queens can move, but only within the pinmask.
+        // https://lichess.org/editor/8/4k1b1/8/4B3/8/2K5/8/8_w_-_-_0_1?color=white
         Bitboard dest = attacks<BISHOP>(from, pos.getPiecesBB()) & ~pos.getPiecesBB(Me) & pos.pinDiag();
 
         if constexpr (InCheck) dest &= pos.checkMask();
@@ -384,6 +388,7 @@ inline bool enumerateRookSliderMoves(const Position &pos, Bitboard source, const
 
     // Diagonally pinned rooks + queens cannot move (orthogonally),
     // as that would make them get out of the pinmask.
+    // https://lichess.org/editor/8/4k1b1/8/4R3/8/2K5/8/8_w_-_-_0_1?color=white
     const Bitboard bqCanMove = source & ~pos.pinDiag();
 
     Bitboard pieces;
@@ -408,7 +413,8 @@ inline bool enumerateRookSliderMoves(const Position &pos, Bitboard source, const
     pieces = bqCanMove & pos.pinOrtho();
     bitloop(pieces) {
         Square from = bitscan(pieces);
-        // Diagonally pinned rooks + queens can move, but only within the pinmask.
+        // Orthogonally pinned rooks + queens can move, but only within the pinmask.
+        // https://lichess.org/editor/8/4k3/8/2K1R1r1/8/8/8/8_w_-_-_0_1?color=white
         Bitboard dest = attacks<ROOK>(from, pos.getPiecesBB()) & ~pos.getPiecesBB(Me) & pos.pinOrtho();
 
         if constexpr (InCheck) dest &= pos.checkMask();
@@ -429,7 +435,9 @@ inline bool enumerateRookSliderMoves(const Position &pos, Bitboard source, const
 template<Color Me, MoveGenType MGType = ALL_MOVES, typename Handler>
 inline bool enumerateLegalMoves(const Position &pos, const Handler& handler) {
     switch(pos.nCheckers()) {
+
         case 0:
+            // No pieces checking us: we can make all moves
             ENUMERATE_MOVES(enumeratePawnMoves<Me, false, MGType, Handler>(pos, pos.getPiecesBB(Me, PAWN), handler));
             ENUMERATE_MOVES(enumerateKnightMoves<Me, false, MGType, Handler>(pos, pos.getPiecesBB(Me, KNIGHT), handler));
             ENUMERATE_MOVES(enumerateBishopSliderMoves<Me, false, MGType, Handler>(pos, pos.getPiecesBB(Me, BISHOP, QUEEN), handler));
@@ -438,7 +446,10 @@ inline bool enumerateLegalMoves(const Position &pos, const Handler& handler) {
             ENUMERATE_MOVES(enumerateKingMoves<Me, MGType, Handler>(pos, pos.getKingSquare(Me), handler));
 
             return true;
+
+
         case 1:
+            // One piece checking us: we can make all moves in the checkmask
             ENUMERATE_MOVES(enumeratePawnMoves<Me, true, ALL_MOVES, Handler>(pos, pos.getPiecesBB(Me, PAWN), handler));
             ENUMERATE_MOVES(enumerateKnightMoves<Me, true, ALL_MOVES, Handler>(pos, pos.getPiecesBB(Me, KNIGHT), handler));
             ENUMERATE_MOVES(enumerateBishopSliderMoves<Me, true, ALL_MOVES, Handler>(pos, pos.getPiecesBB(Me, BISHOP, QUEEN), handler));
@@ -446,8 +457,10 @@ inline bool enumerateLegalMoves(const Position &pos, const Handler& handler) {
             ENUMERATE_MOVES(enumerateKingMoves<Me, ALL_MOVES, Handler>(pos, pos.getKingSquare(Me), handler));
 
             return true;
+
+
         default: //case 2:
-            // If we are in double check only king moves are allowed
+            // Two pieces checking us: we can't block the check or take both pieces: we can only move the king
             ENUMERATE_MOVES(enumerateKingMoves<Me, ALL_MOVES, Handler>(pos, pos.getKingSquare(Me), handler));
 
             return true;

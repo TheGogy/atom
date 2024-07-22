@@ -4,6 +4,7 @@ CXX := g++
 TARGET_EXEC := atom
 SRC_DIRS := src src/incbin src/nnue src/nnue/features src/nnue/layers
 SOURCES := $(wildcard $(addsuffix /*.cpp,$(SRC_DIRS)))
+OBJECTS := $(SOURCES:.cpp=.o)
 
 COMMONFLAGS  := -Wall -std=c++20 -fno-rtti
 SSE2FLAGS    := $(COMMONFLAGS) -msse2 -DUSE_SSE -DUSE_SSE2
@@ -19,30 +20,36 @@ CXXFLAGS := $($(CPUFLAGS))
 LDFLAGS := $($(CPUFLAGS))
 
 DEBUG_CXXFLAGS := $(CXXFLAGS) -g -O0 -DDEBUG
-RELEASE_CXXFLAGS := $(CXXFLAGS) -O3 -funroll-loops -finline -fomit-frame-pointer -flto -DNDEBUG -mtune=native
-PROFILE_CXXFLAGS := $(CXXFLAGS) $(RELEASE_CXXFLAGS) -g
-
 DEBUG_LDFLAGS := $(LDFLAGS)
+
+RELEASE_CXXFLAGS := $(CXXFLAGS) -O3 -funroll-loops -finline-functions -finline-limit=1000 -fomit-frame-pointer -flto -ftree-vectorize -fprefetch-loop-arrays -fpeel-loops -funroll-all-loops -march=native -DNDEBUG -mtune=native
 RELEASE_LDFLAGS := $(LDFLAGS) -flto -s -static
+
+PROFILE_CXXFLAGS := $(CXXFLAGS) $(RELEASE_CXXFLAGS) -g
 PROFILE_LDFLAGS := $(LDFLAGS) -flto -g -static
 
 .PHONY: all debug release profile clean
 
 all: release
 
-debug:
-	@echo "Using flag set: $(CPUFLAGS)"
-	$(CXX) $(DEBUG_CXXFLAGS) $(DEBUG_LDFLAGS) -o $(TARGET_EXEC) $(SOURCES)
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-release:
-	@echo "Using flag set: $(CPUFLAGS)"
-	$(CXX) $(RELEASE_CXXFLAGS) $(RELEASE_LDFLAGS) -o $(TARGET_EXEC) $(SOURCES)
+debug: CXXFLAGS := $(DEBUG_CXXFLAGS)
+debug: LDFLAGS := $(DEBUG_LDFLAGS)
+debug: $(TARGET_EXEC)
 
-profile:
-	@echo "Using flag set: $(CPUFLAGS)"
-	$(CXX) $(PROFILE_CXXFLAGS) $(PROFILE_LDFLAGS) -o $(TARGET_EXEC) $(SOURCES)
+release: CXXFLAGS := $(RELEASE_CXXFLAGS)
+release: LDFLAGS := $(RELEASE_LDFLAGS)
+release: $(TARGET_EXEC)
+
+profile: CXXFLAGS := $(PROFILE_CXXFLAGS)
+profile: LDFLAGS := $(PROFILE_LDFLAGS)
+profile: $(TARGET_EXEC)
+
+$(TARGET_EXEC): $(OBJECTS)
+	$(CXX) $(LDFLAGS) -o $@ $^
 
 clean:
-	rm -rf *.o
+	rm -rf $(OBJECTS)
 	rm -f $(TARGET_EXEC)
-

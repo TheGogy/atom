@@ -1,9 +1,11 @@
 
 #include "uci.h"
+#include "movegen.h"
 #include "position.h"
 #include "types.h"
 #include <algorithm>
 #include <cmath>
+#include <sstream>
 
 namespace Atom {
 
@@ -52,6 +54,22 @@ std::string Uci::formatMove(Move m) {
 }
 
 
+// Converts a UCI move string into a Move.
+// If the move is not in the legal moves, or not a valid move string, returns MOVE_NULL.
+Move Uci::toMove(const Position &pos, std::string moveStr) {
+    Move m = MOVE_NULL;
+
+    enumerateLegalMoves(pos, [&](Move move) {
+        if (moveStr == formatMove(move)) {
+            m = move;
+        }
+        return true;
+    });
+
+    return m;
+}
+
+
 // Gets the win rate parameters, taken from stockfish to ensure
 // compatibility with NNUE output.
 struct WinRateParams {
@@ -76,10 +94,46 @@ WinRateParams getWinRateParams(const Position &pos) {
     return {a, b};
 }
 
-
+// Gets the current win rate parameters in centipawns. From stockfish.
 int Uci::toCentipawns(Value v, const Position &pos) {
     auto [a, b] = getWinRateParams(pos);
     return std::round(100 * int(v) / a);
+}
+
+
+void Uci::loop() {
+    std::string token, input;
+
+    while (true) {
+        std::getline(std::cin, input);
+        std::istringstream is(input);
+
+        token.clear();
+        is >> std::skipws >> token;
+
+        if (token == "uci") {
+            cmdUci();
+        } else if (token == "isready") {
+            cmdIsReady();
+        } else if (token == "ucinewgame") {
+            cmdUciNewGame();
+        } else if (token == "setoption") {
+            cmdSetOption(is);
+        } else if (token == "go") {
+            cmdGo(is);
+        } else if (token == "stop") {
+            cmdStop();
+        } else if (token == "perft") {
+            cmdPerft(is);
+        } else if (token == "debug" || token == "d") {
+            cmdDebug();
+        } else if (token == "quit") {
+            break;
+        } else {
+            std::cout << "Error: unknown command '" << token << "'" << std::endl;
+        }
+
+    }
 }
 
 
@@ -90,19 +144,70 @@ int Uci::toCentipawns(Value v, const Position &pos) {
 // ║             Command              ║         Response (* means blocking)          ║
 // ╠══════════════════════════════════╬══════════════════════════════════════════════╣
 // ║ uci                              ║   uciok <engine name, authors, options>      ║
-// ║ isready                          ║ * readyok                                    ║
-// ║ ucinewgame                       ║ * (resets the TT and all position variables) ║
-// ║ setoption name <opt> value <val> ║ * (sets the option <opt> to the value <val>  ║
-// ║ go (wtime, btime etc)            ║ * (Searches current position)                ║
+// ║ isready                          ║ * responds with "readyok"                    ║
+// ║ ucinewgame                       ║ * resets the TT and all position variables   ║
+// ║ setoption name <opt> value <val> ║ * sets the option <opt> to the value <val>   ║
+// ║ go (wtime, btime etc)            ║ * Searches current position                  ║
 // ║ stop                             ║   Finish search threads and report bestmove  ║
-// ║ quit                             ║   Kills the engine process                   ║
 // ║ perft <d>                        ║   Runs perft on current pos up to depth <d>  ║
 // ║ debug (or just "d")              ║   Prints the current position + debug info   ║
-// ║ moves (or just "m")              ║   Prints the moves available in the current  ║
+// ║ quit                             ║   Ends the process                           ║
 // ╚══════════════════════════════════╩══════════════════════════════════════════════╝
 
 
+void Uci::cmdUci() {
+    std::cout << "id name Atom " << ENGINE_VERSION << std::endl;
+    std::cout << "id author George Rawlinson and Tomáš Pecher" << std::endl;
+    std::cout << "uciok" << std::endl;
+}
 
+
+void Uci::cmdIsReady() {
+    std::cout << "readyok" << std::endl;
+}
+
+
+void Uci::cmdUciNewGame() {
+    engine.newGame();
+}
+
+
+void Uci::cmdSetOption(std::istringstream& is) {
+    // TODO: Set option
+}
+
+
+void Uci::cmdGo(std::istringstream& is) {
+    // TODO: Choose a random move for debugging
+}
+
+
+void Uci::cmdStop() {
+    // TODO: Stop the engine
+}
+
+
+void Uci::cmdPerft(std::istringstream& is) {
+    int depth;
+    is >> depth;
+
+    if (depth == 0) {
+        std::cout << "Please specify a depth > 0." << std::endl;
+        return;
+    }
+
+    std::cout << "Running perft at depth: " << depth << std::endl;
+    engine.runPerft(depth);
+}
+
+void Uci::cmdDebug() {
+    std::cout << engine.getDebugInfo() << std::endl;
+}
+
+
+void Uci::cmdQuit() {
+    engine.stop();
+}
 
 } // namespace Atom
 

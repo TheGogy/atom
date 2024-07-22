@@ -693,15 +693,4 @@ template void Position::undoMove<BLACK, EN_PASSANT>(Move m);
 template void Position::undoMove<BLACK, CASTLING>(Move m);
 
 
-// Prints the current position and all its metadata to stdout.
-// Used for debugging purposes.
-void printPosition(const Position &pos) {
-    std::cout << pos.printable() << std::endl << std::endl;
-    std::cout << "FEN:            " << pos.fen() << std::endl;
-    std::cout << "Hash:           " << pos.hash() << std::endl;
-    std::cout << "Diagonal pin:   " << pos.pinDiag() << std::endl;
-    std::cout << "Orthogonal pin: " << pos.pinOrtho() << std::endl;
-    std::cout << "Checkmask:      " << pos.checkMask() << std::endl;
-}
-
 } // namespace Atom

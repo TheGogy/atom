@@ -5,7 +5,7 @@
 #include "uci.h"
 
 #include <chrono>
-#include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <fstream>
 
@@ -14,8 +14,8 @@ namespace Atom {
 using std::ifstream;
 
 template <bool Div, Color Me>
-size_t perft(Position &pos, int depth) {
-    size_t total = 0;
+std::uint64_t perft(Position &pos, int depth) {
+    std::uint64_t total = 0;
     MoveList moves;
 
     if (!Div && depth <= 1) {
@@ -28,7 +28,7 @@ size_t perft(Position &pos, int depth) {
     }
 
     enumerateLegalMoves<Me>(pos, [&](Move move) {
-        size_t n = 0;
+        std::uint64_t n = 0;
 
         if (Div && depth == 1) {
             n = 1;
@@ -49,29 +49,35 @@ size_t perft(Position &pos, int depth) {
     return total;
 }
 
-template size_t perft<true, WHITE>(Position &pos, int depth);
-template size_t perft<false, WHITE>(Position &pos, int depth);
-template size_t perft<true, BLACK>(Position &pos, int depth);
-template size_t perft<false, BLACK>(Position &pos, int depth);
+template std::uint64_t perft<true, WHITE>(Position &pos, int depth);
+template std::uint64_t perft<false, WHITE>(Position &pos, int depth);
+template std::uint64_t perft<true, BLACK>(Position &pos, int depth);
+template std::uint64_t perft<false, BLACK>(Position &pos, int depth);
 
 template<bool Div>
-size_t perft(Position &pos, int depth) {
+std::uint64_t perft(Position &pos, int depth) {
     return pos.getSideToMove() == WHITE ? perft<Div, WHITE>(pos, depth) : perft<Div, BLACK>(pos, depth);
 }
 
-template size_t perft<true>(Position &pos, int depth);
-template size_t perft<false>(Position &pos, int depth);
+template std::uint64_t perft<true>(Position &pos, int depth);
+template std::uint64_t perft<false>(Position &pos, int depth);
 
 void perft(Position &pos, int depth) {
     auto begin = std::chrono::high_resolution_clock::now();
-    size_t n = perft<true>(pos, depth);
+    std::uint64_t n = perft<true>(pos, depth);
     auto end = std::chrono::high_resolution_clock::now();
 
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
     std::cout << std::endl;
     std::cout << "Nodes:    " << n << std::endl;
     std::cout << "Time:     " << elapsed << "ms" << std::endl;
-    std::cout << "NPS:      " << size_t(n * 1000 / elapsed) << std::endl;
+
+    // Ensure that we do not divide by zero
+    if (elapsed > 0) {
+        std::cout << "NPS:      " << std::uint64_t(n * 1000 / elapsed) << std::endl;
+    } else {
+        std::cout << "NPS:      N/A" << std::endl;
+    }
 }
 
 bool runTest(const std::string &fen, int depth, Bitboard expected_nodes) {
@@ -114,7 +120,7 @@ void testFromFile(const std::string &filename) {
             token.erase(0, token.find_first_not_of(' '));
             if (token[0] == 'D' && std::isdigit(token[1])) {
                 int depth;
-                uint64_t expected_nodes;
+                std::uint64_t expected_nodes;
                 if (sscanf(token.c_str(), "D%d %lu", &depth, &expected_nodes) == 2) {
                     // Test the given perft and update counters
                     if (runTest(fen, depth, expected_nodes)) {
