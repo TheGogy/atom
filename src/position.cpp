@@ -409,17 +409,17 @@ std::string Position::fen() const {
 // Returns a string containing a visualization of the current position.
 std::string Position::printable() const {
     std::ostringstream ss;
-    ss << "   ╔═══╤═══╤═══╤═══╤═══╤═══╤═══╤═══╗" << std::endl;
+    ss << "   +---+---+---+---+---+---+---+---+" << std::endl;
     for (int r = RANK_8; r >= RANK_1; --r) {
-        ss << " " << r + 1 << " ║ ";
+        ss << " " << r + 1 << " | ";
         for (int f = FILE_A; f <= FILE_H; ++f) {
             ss << PIECE_TO_CHAR[getPieceAt(createSquare(File(f), Rank(r)))];
-            ss << (f < FILE_H ? " │ " : " ║ ");
+            ss << (f < FILE_H ? " | " : " | ");
         }
         if (r > RANK_1)
-            ss << std::endl << "   ╟───┼───┼───┼───┼───┼───┼───┼───╢" << std::endl;
+            ss << std::endl << "   +---+--─+---+---+---+---+---+---+" << std::endl;
     }
-    ss << std::endl << "   ╚═══╧═══╧═══╧═══╧═══╧═══╧═══╧═══╝" << std::endl;
+    ss << std::endl << "   +---+---+---+---+---+---+---+---+" << std::endl;
     ss << std::endl << "     a   b   c   d   e   f   g   h" << std::endl;
 
     return ss.str();

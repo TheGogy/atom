@@ -2,6 +2,8 @@
 #define BITBOARD_H
 
 #include <immintrin.h>
+#include <string>
+
 #include "types.h"
 
 namespace Atom {
@@ -11,11 +13,7 @@ namespace Atom {
 #define setBit(bitboard, square) ((bitboard) |=  (1ULL << (square)))
 #define popBit(bitboard, square) ((bitboard) &= ~(1ULL << (square)))
 
-
 #define bitloop(bb) for(; bb; bb &= bb - 1)
-// This might be faster on some newer CPUs
-// #define bitloop(bb) for(; bb; bb = _blsr_u64(bb))
-
 #define popcount(bb) __builtin_popcountll(bb)
 #define bitscan(bb) Square(_tzcnt_u64(bb))
 #define mask(bitboard) _blsi_u64(bitboard)
@@ -23,21 +21,21 @@ namespace Atom {
 
 
 void initBBs();
-void print_bb(const Bitboard bb);
+std::string visualizeBB(const Bitboard bb);
 
 
 // Shifts all bits in a bitboard in the given direction.
 template<Direction D>
 constexpr Bitboard shift(Bitboard b) {
     switch(D) {
-        case NORTH:         return b << 8;
-        case SOUTH:       return b >> 8;
-        case EAST:      return (b & ~FILE_H_BB) << 1;
-        case WEST:       return (b & ~FILE_A_BB) >> 1;
-        case NORTH_EAST:   return (b & ~FILE_H_BB) << 9;
-        case NORTH_WEST:    return (b & ~FILE_A_BB) << 7;
+        case NORTH: return b << 8;
+        case SOUTH: return b >> 8;
+        case EAST:  return (b & ~FILE_H_BB) << 1;
+        case WEST:  return (b & ~FILE_A_BB) >> 1;
+        case NORTH_EAST: return (b & ~FILE_H_BB) << 9;
+        case NORTH_WEST: return (b & ~FILE_A_BB) << 7;
         case SOUTH_EAST: return (b & ~FILE_H_BB) >> 7;
-        case SOUTH_WEST:  return (b & ~FILE_A_BB) >> 9;
+        case SOUTH_WEST: return (b & ~FILE_A_BB) >> 9;
     }
 }
 
@@ -90,11 +88,11 @@ inline Bitboard sliderAttacks(Square sq, Bitboard occupied) {
 // For pawns, use pawnAttacks().
 template<PieceType Pt>
 inline Bitboard attacks(Square sq, Bitboard occupied = 0) {
-    if constexpr (Pt == KING) return KING_MOVE[sq];
+    if constexpr (Pt == KING)   return KING_MOVE[sq];
     if constexpr (Pt == KNIGHT) return KNIGHT_MOVE[sq];
     if constexpr (Pt == BISHOP) return sliderAttacks<BISHOP>(sq, occupied);
-    if constexpr (Pt == ROOK) return sliderAttacks<ROOK>(sq, occupied);
-    if constexpr (Pt == QUEEN) return sliderAttacks<BISHOP>(sq, occupied) | sliderAttacks<ROOK>(sq, occupied);
+    if constexpr (Pt == ROOK)   return sliderAttacks<ROOK>(sq, occupied);
+    if constexpr (Pt == QUEEN)  return sliderAttacks<BISHOP>(sq, occupied) | sliderAttacks<ROOK>(sq, occupied);
 }
 
 } // namespace Atom

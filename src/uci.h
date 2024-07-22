@@ -16,6 +16,8 @@ class Uci {
 public:
     void loop();          // Main loop
 
+    static std::string toLower(std::string s);
+
     static Square parseSquare(std::string str); // Parse square
     static Move parseMove(std::string str);     // Parse move
 
@@ -33,12 +35,14 @@ private:
     void cmdUci();
     void cmdIsReady();
     void cmdUciNewGame();
+    void cmdPosition(std::istringstream& is);
     void cmdSetOption(std::istringstream& is);
     void cmdGo(std::istringstream& is);
     void cmdStop();
     void cmdQuit();
     void cmdPerft(std::istringstream& is);
     void cmdDebug();
+    void cmdVisualize(std::istringstream& is);
 };
 
 } // namespace Atom

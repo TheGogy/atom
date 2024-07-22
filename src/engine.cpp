@@ -3,6 +3,7 @@
 #include "nnue.h"
 #include "nnue/network.h"
 #include "perft.h"
+#include "position.h"
 #include "types.h"
 #include "uci.h"
 
@@ -25,13 +26,13 @@ Engine::Engine() :
 
 // Engine destructor. Should exit all threads and free all memory.
 Engine::~Engine() {
-
+    // TODO: Collect all threads and terminate engine
 }
 
 
 // Clears everything and sets a new game
 void Engine::newGame() {
-
+    pos.setFromFEN(STARTPOS_FEN);
 }
 
 
@@ -97,7 +98,7 @@ void Engine::loadSmallNetFromFile(const std::string& path) {
 
 
 void Engine::stop() {
-
+    // TODO: Stop all threads and report current bestmove
 }
 
 

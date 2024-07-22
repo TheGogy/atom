@@ -260,8 +260,6 @@ inline void Position::unsetPiece(Square sq) {
     piecesBB[p] &= ~b;
 }
 
-void printPosition(const Position &pos);
-
 } // namespace Atom
 
 #endif

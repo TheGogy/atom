@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "bitboard.h"
 #include "nnue/network.h"
 
 namespace Atom {
@@ -19,8 +20,15 @@ public:
     void setPosition(const std::string& fen, const std::vector<std::string>& moves);
 
     // Debugging
-    std::string getDebugInfo();      // Returns debug info for the position
     void runPerft(int depth);        // Runs perft (performance test)
+    std::string getDebugInfo();      // Returns debug info for the position
+
+    // Returns a visualization of various bitboards
+    std::string visualizePinOrtho()   { return visualizeBB(pos.pinOrtho());   }
+    std::string visualizePinDiag()    { return visualizeBB(pos.pinDiag());    }
+    std::string visualizeCheckers()   { return visualizeBB(pos.checkers());   }
+    std::string visualizeCheckmask()  { return visualizeBB(pos.checkMask());  }
+    std::string visualizeThreatened() { return visualizeBB(pos.threatened()); }
 
     // NNUE
     void loadNetworks();                                // Loads NNUE networks

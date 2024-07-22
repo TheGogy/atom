@@ -1,7 +1,9 @@
 
+#include <iostream>
+#include <sstream>
+
 #include "bitboard.h"
 #include "types.h"
-#include <iostream>
 
 namespace Atom {
 
@@ -18,23 +20,27 @@ Bitboard BISHOP_DATA[0x1480];
 
 // Prints the given bitboard to stdout.
 // Used for debugging.
-void print_bb(const Bitboard bb) {
+std::string visualizeBB(const Bitboard bb) {
+    std::stringstream ss;
+
     int sq;
-    std::cout << std::endl;
+    ss << std::endl;
     for (int rank = 7; rank >= 0; rank--) {
-        std::cout << " " << rank + 1 << "│";
+        ss << " " << rank + 1 << "|";
         for (int file = 0; file < 8; file++) {
             sq = rank * 8 + file;
             if (getBit(bb, sq))
-                std::cout << "# ";
+                ss << "# ";
             else
-                std::cout << "· ";
+                ss << "· ";
         }
-        std::cout << std::endl;
+        ss << std::endl;
     }
-    std::cout << "  └───────────────" << std::endl;
-    std::cout << "   a b c d e f g h" << std::endl;
-    std::cout << "Bitboard: " << bb << std::endl;
+    ss << "  +---------------" << std::endl;
+    ss << "   a b c d e f g h" << std::endl;
+    ss << "Bitboard: " << bb << std::endl;
+
+    return ss.str();
 }
 
 

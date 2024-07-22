@@ -1,13 +1,25 @@
 
-#include "uci.h"
-#include "movegen.h"
-#include "position.h"
-#include "types.h"
 #include <algorithm>
 #include <cmath>
 #include <sstream>
 
+#include "uci.h"
+#include "movegen.h"
+#include "nnue.h"
+#include "position.h"
+#include "types.h"
+
 namespace Atom {
+
+
+std::string Uci::toLower(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(), [](auto c) { 
+        return std::tolower(c); 
+    });
+
+    return s;
+}
+
 
 // Formats the given square according to the UCI standard (a1 --> h8)
 std::string Uci::formatSquare(Square sq) {
@@ -117,6 +129,8 @@ void Uci::loop() {
             cmdIsReady();
         } else if (token == "ucinewgame") {
             cmdUciNewGame();
+        } else if (token == "position") {
+            cmdPosition(is);
         } else if (token == "setoption") {
             cmdSetOption(is);
         } else if (token == "go") {
@@ -129,6 +143,10 @@ void Uci::loop() {
             cmdDebug();
         } else if (token == "quit") {
             break;
+        } else if (token == "clear") {
+            std::cout << "\033[2J\033[1;1H";
+        } else if (token == "visualize" || token == "v") {
+            cmdVisualize(is);
         } else {
             std::cout << "Error: unknown command '" << token << "'" << std::endl;
         }
@@ -140,24 +158,30 @@ void Uci::loop() {
 //
 // ------------------------------ < UCI main commands > ------------------------------
 //
-// ╔══════════════════════════════════╦══════════════════════════════════════════════╗
-// ║             Command              ║         Response (* means blocking)          ║
-// ╠══════════════════════════════════╬══════════════════════════════════════════════╣
-// ║ uci                              ║   uciok <engine name, authors, options>      ║
-// ║ isready                          ║ * responds with "readyok"                    ║
-// ║ ucinewgame                       ║ * resets the TT and all position variables   ║
-// ║ setoption name <opt> value <val> ║ * sets the option <opt> to the value <val>   ║
-// ║ go (wtime, btime etc)            ║ * Searches current position                  ║
-// ║ stop                             ║   Finish search threads and report bestmove  ║
-// ║ perft <d>                        ║   Runs perft on current pos up to depth <d>  ║
-// ║ debug (or just "d")              ║   Prints the current position + debug info   ║
-// ║ quit                             ║   Ends the process                           ║
-// ╚══════════════════════════════════╩══════════════════════════════════════════════╝
+// +-----------------------------------+----------------------------------------------+
+// |             Command               |         Response (* means blocking)          |
+// +-----------------------------------+----------------------------------------------+
+// | uci                               |   uciok <engine name, authors, options>      |
+// | isready                           | * responds with "readyok"                    |
+// | ucinewgame                        | * resets the TT and all position variables   |
+// | position <fen / startpos> <moves> | * sets the position according to FEN / moves |
+// | setoption name <opt> value <val>  | * sets the option <opt> to the value <val>   |
+// | go (wtime, btime etc)             | * Searches current position                  |
+// | stop                              |   Finish search threads and report bestmove  |
+// | perft <depth>                     |   Runs perft on current pos to given depth   |
+// | debug (or just "d")               |   Prints the current position + debug info   |
+// | quit                              |   Ends the process                           |
+// | clear                             |   Clears the terminal                        |
+// | visualize (or just "v") <bb>      |   Prints a visualization of bitboard <bb>    |
+// +-----------------------------------+----------------------------------------------+
 
 
 void Uci::cmdUci() {
     std::cout << "id name Atom " << ENGINE_VERSION << std::endl;
     std::cout << "id author George Rawlinson and Tomáš Pecher" << std::endl;
+    std::cout << std::endl;
+    std::cout << "option name EvalFile type string default <inbuilt> " << EvalFileDefaultNameBig << std::endl;
+    std::cout << "option name EvalFileSmall type string default <inbuilt> " << EvalFileDefaultNameSmall << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
@@ -172,8 +196,69 @@ void Uci::cmdUciNewGame() {
 }
 
 
+void Uci::cmdPosition(std::istringstream& is) {
+    std::string token, fen;
+
+    is >> token;
+
+    // Set position according to position token
+    // This bit consumes up to the moves token
+    if (token == "startpos") {
+        fen = STARTPOS_FEN;
+        is >> token;
+    } else if (token == "kiwipete") {
+        fen = KIWIPETE_FEN;
+        is >> token;
+    } else if (token == "fen") {
+        while (is >> token && token != "moves") {
+            fen += token + ' ';
+        }
+    } else {
+        std::cout << "Error: unknown position" << std::endl;
+        return;
+    }
+
+    // This bit consumes all the moves
+    std::vector<std::string> moves;
+    while (is >> token) {
+        moves.push_back(toLower(token));
+    }
+
+    engine.setPosition(fen, moves);
+}
+
+
 void Uci::cmdSetOption(std::istringstream& is) {
-    // TODO: Set option
+    // +---------------+--------------------------------------+
+    // |  Option       |                Value                 |
+    // +---------------+--------------------------------------+
+    // | EvalFile      | (string) Path to the big NNUE file   |
+    // | EvalFileSmall | (string) Path to the small NNUE file |
+    // +---------------+--------------------------------------+
+
+    std::string token, optName, optValue;
+    is >> token;
+    if (token != "name") {
+        std::cout << "Error: Must specify option name" << std::endl;
+        return;
+    }
+
+    // Consume actual option part
+    is >> token;
+    if (token == "EvalFile") {
+        is >> token;
+        if (token != "value") std::cout << "Error: Must specify value" << std::endl;
+        is >> token;
+        engine.loadBigNetFromFile(token);
+    }
+
+    is >> token;
+    if (token == "EvalFileSmall") {
+        is >> token;
+        if (token != "value") std::cout << "Error: Must specify value" << std::endl;
+        is >> token;
+        engine.loadSmallNetFromFile(token);
+    }
 }
 
 
@@ -207,6 +292,27 @@ void Uci::cmdDebug() {
 
 void Uci::cmdQuit() {
     engine.stop();
+}
+
+
+void Uci::cmdVisualize(std::istringstream& is) {
+    std::string token;
+    is >> token;
+    token = toLower(token);
+
+    if (token == "pinortho") {
+        std::cout << engine.visualizePinOrtho() << std::endl;
+    } else if (token == "pindiag") {
+        std::cout << engine.visualizePinDiag() << std::endl;
+    } else if (token == "checkers") {
+        std::cout << engine.visualizeCheckers() << std::endl;
+    } else if (token == "checkmask") {
+        std::cout << engine.visualizeCheckmask() << std::endl;
+    } else if (token == "threatened") {
+        std::cout << engine.visualizeThreatened() << std::endl;
+    } else {
+        std::cout << "Error: Unknown bitboard to visualize" << std::endl;
+    }
 }
 
 } // namespace Atom
