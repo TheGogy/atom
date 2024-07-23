@@ -1,6 +1,9 @@
 #include "bitboard.h"
 #include "uci.h"
 #include "zobrist.h"
+#include <cstddef>
+#include <cstdlib>
+#include <ctime>
 
 using namespace Atom;
 
@@ -9,6 +12,7 @@ using namespace Atom;
 void initEverything() {
     initBBs();
     Zobrist::init();
+    srand(time(NULL));
 }
 
 int main (int argc, char *argv[]) {
@@ -25,9 +29,6 @@ int main (int argc, char *argv[]) {
     // std::cout << "Piece value static eval:  " << Eval::pieceValueEval(pos) << std::endl;
     // std::cout << "NNUE static eval (small): " << psqtSmall << " (psqt) " << positionalSmall << " (positional)" << std::endl;
     // std::cout << "NNUE static eval (big):   " << psqtBig << " (psqt) " << positionalBig << " (positional)" << std::endl;
-    //
-    // // testFromFile("tests/perft_medium.txt");
-    // perft(pos, 6);
 
     return 0;
 }

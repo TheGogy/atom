@@ -1,5 +1,9 @@
+#include <cstdlib>
+#include <sstream>
+#include <vector>
 
 #include "engine.h"
+#include "movegen.h"
 #include "nnue.h"
 #include "nnue/network.h"
 #include "perft.h"
@@ -7,8 +11,6 @@
 #include "search.h"
 #include "types.h"
 #include "uci.h"
-
-#include <sstream>
 
 namespace Atom {
 
@@ -102,7 +104,18 @@ void Engine::loadSmallNetFromFile(const std::string& path) {
 //
 
 void Engine::go(SearchLimits limits) {
-    // TODO: Find the best move!
+    // TODO: Find the best move! This currently selects a random move
+
+    ValueList<Move, MAX_MOVE> moveList;
+
+    enumerateLegalMoves(pos, [&](Move m) {
+        moveList.push_back(m);
+        return true;
+    });
+
+    Move bestMove = moveList[rand() % moveList.size()];
+
+    Uci::callbackBestMove(Uci::formatMove(bestMove), "");
 }
 
 
