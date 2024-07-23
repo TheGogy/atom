@@ -5,9 +5,15 @@
 #include <cstdint>
 #include <vector>
 
+#include "nnue/network.h"
 #include "types.h"
 
 namespace Atom {
+
+// Declare these here: they are defined in thread.h
+class ThreadPool;
+
+namespace Search {
 
 using TimePoint = std::chrono::milliseconds::rep;
 
@@ -25,6 +31,28 @@ struct SearchLimits {
     uint64_t nodes;
     int depth, mate, movesToGo;
 };
+
+struct SearchWorkerShared {
+    SearchWorkerShared(
+        ThreadPool& threadPool,
+        NNUE::Networks& NNUEs
+    ) :
+    threads(threadPool),
+    networks(NNUEs) {}
+
+    ThreadPool& threads;
+    const NNUE::Networks& networks;
+};
+
+class SearchWorker {
+public:
+
+    void startSearch();
+
+    void clear();
+};
+
+} // namespace Search
 
 } // namespace Atom
 

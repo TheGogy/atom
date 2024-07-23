@@ -6,6 +6,7 @@
 #include "movegen.h"
 #include "nnue.h"
 #include "nnue/network.h"
+#include "nnue/nnue_misc.h"
 #include "perft.h"
 #include "position.h"
 #include "search.h"
@@ -121,6 +122,12 @@ void Engine::go(SearchLimits limits) {
 
 void Engine::stop() {
     // TODO: Stop all threads and report current bestmove
+}
+
+
+void Engine::traceEval() {
+    verifyNetworks();
+    // TODO: Return string detailing eval from all eval sources
 }
 
 

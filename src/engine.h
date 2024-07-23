@@ -35,8 +35,9 @@ public:
     void setPosition(const std::string& fen, const std::vector<std::string>& moves);
 
     // Debugging
-    void runPerft(int depth);        // Runs perft (performance test)
-    std::string getDebugInfo();      // Returns debug info for the position
+    void runPerft(int depth);                         // Runs perft (performance test)
+    std::string getDebugInfo();                       // Returns debug info for the position
+    std::string getFen() const { return pos.fen(); }  // Returns the FEN of the position
 
     // Returns a visualization of various bitboards
     std::string visualizePinOrtho()   { return visualizeBB(pos.pinOrtho());   }
@@ -54,6 +55,7 @@ public:
     // Runs respective UCI commands
     void go(SearchLimits limits);
     void stop();
+    void traceEval();
 
 private:
     Position pos;

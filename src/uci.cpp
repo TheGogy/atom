@@ -385,5 +385,12 @@ void Uci::cmdVisualize(std::istringstream& is) {
     }
 }
 
+
+void Uci::cmdTraceEval() {
+    engine.traceEval();
+}
+
+
+
 } // namespace Atom
 
