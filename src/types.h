@@ -218,6 +218,7 @@ constexpr CastlingRight CastlingRightsMask[SQUARE_NB] = {
     BLACK_QUEEN_SIDE, NO_CASTLING, NO_CASTLING, NO_CASTLING, BLACK_QUEEN_SIDE|BLACK_KING_SIDE, NO_CASTLING, NO_CASTLING, BLACK_KING_SIDE,
 };
 
+
 // Squares that need to be empty for castling
 constexpr Bitboard CastlingPath[CASTLING_RIGHT_NB] = {
     EMPTY,
@@ -231,6 +232,7 @@ constexpr Bitboard CastlingPath[CASTLING_RIGHT_NB] = {
     sqToBB(SQ_D8) | sqToBB(SQ_C8) | sqToBB(SQ_B8)  // black queenside
 };
 
+
 // Squares that must not be attacked by the enemy for castling
 constexpr Bitboard CastlingKingPath[CASTLING_RIGHT_NB] = {
     EMPTY,
@@ -242,6 +244,14 @@ constexpr Bitboard CastlingKingPath[CASTLING_RIGHT_NB] = {
     EMPTY,
     EMPTY,
     sqToBB(SQ_E8) | sqToBB(SQ_D8) | sqToBB(SQ_C8)  // Black queenside
+};
+
+
+enum Bound {
+    BOUND_NONE,
+    BOUND_LOWER,
+    BOUND_UPPER,
+    BOUND_EXACT = BOUND_LOWER | BOUND_LOWER
 };
 
 
@@ -364,6 +374,7 @@ struct DirtyPiece {
     Square to[3];
 };
 
+using Depth = int;
 using Value = int;
 
 constexpr Value VALUE_ZERO     = 0;

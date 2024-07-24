@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "nnue/network.h"
+#include "nnue/nnue_accumulator.h"
 #include "types.h"
 
 namespace Atom {
@@ -13,15 +14,16 @@ namespace Atom {
 // Declare these here: they are defined in thread.h
 class ThreadPool;
 
-namespace Search {
-
 using TimePoint = std::chrono::milliseconds::rep;
 
 inline TimePoint now() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
-             std::chrono::steady_clock::now().time_since_epoch())
+             std::chrono::high_resolution_clock::now().time_since_epoch())
       .count();
 }
+
+
+namespace Search {
 
 struct SearchLimits {
     std::vector<std::string> searchMoves;
@@ -40,16 +42,20 @@ struct SearchWorkerShared {
     threads(threadPool),
     networks(NNUEs) {}
 
-    ThreadPool& threads;
+    ThreadPool&           threads;
     const NNUE::Networks& networks;
 };
 
 class SearchWorker {
 public:
-
+    SearchWorker( SearchWorkerShared& );
     void startSearch();
-
     void clear();
+
+private:
+    ThreadPool&             threads;
+    const NNUE::Networks&   networks;
+    NNUE::AccumulatorCaches cacheTable;
 };
 
 } // namespace Search

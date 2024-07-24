@@ -21,6 +21,8 @@ public:
 
     size_t id() const { return idx; }
 
+    std::unique_ptr<Search::SearchWorker> worker;
+
 private:
     size_t idx;
 
@@ -33,7 +35,7 @@ private:
 class ThreadPool {
 public:
     ThreadPool() {}                     // Constructor
-    ~ThreadPool() { clearThreads(); }  // Destructor
+    ~ThreadPool() { clearThreads(); }   // Destructor
 
     // ThreadPool cannot be copied
     ThreadPool(const ThreadPool &)            = delete;

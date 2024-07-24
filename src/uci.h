@@ -36,7 +36,7 @@ public:
 private:
     Engine engine;
 
-    SearchLimits parseGoLimits(std::istringstream& is);
+    Search::SearchLimits parseGoLimits(std::istringstream& is);
 
     // UCI commands
     void cmdUci();

@@ -63,11 +63,10 @@ template std::uint64_t perft<true>(Position &pos, int depth);
 template std::uint64_t perft<false>(Position &pos, int depth);
 
 void perft(Position &pos, int depth) {
-    auto begin = std::chrono::high_resolution_clock::now();
+    long start = now();
     std::uint64_t n = perft<true>(pos, depth);
-    auto end = std::chrono::high_resolution_clock::now();
 
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+    long elapsed = now() - start;
     std::cout << std::endl;
     std::cout << "Nodes:    " << n << std::endl;
     std::cout << "Time:     " << elapsed << "ms" << std::endl;

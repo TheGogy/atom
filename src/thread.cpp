@@ -4,8 +4,12 @@
 
 namespace Atom {
 
+void Thread::search() {
+    worker->startSearch();
+}
+
 void Thread::clear() {
-    
+    worker->clear();
 }
 
 void ThreadPool::clearThreads() {

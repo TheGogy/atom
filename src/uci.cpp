@@ -293,8 +293,8 @@ void Uci::cmdSetOption(std::istringstream& is) {
     }
 }
 
-SearchLimits Uci::parseGoLimits(std::istringstream& is) {
-    SearchLimits limits;
+Search::SearchLimits Uci::parseGoLimits(std::istringstream& is) {
+    Search::SearchLimits limits;
     std::string token;
 
     limits.startTimePoint = now();
@@ -331,7 +331,7 @@ SearchLimits Uci::parseGoLimits(std::istringstream& is) {
 
 
 void Uci::cmdGo(std::istringstream& is) {
-    SearchLimits limits = parseGoLimits(is);
+    Search::SearchLimits limits = parseGoLimits(is);
     engine.go(limits);
 }
 

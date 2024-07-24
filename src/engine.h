@@ -53,7 +53,7 @@ public:
     void verifyNetworks();
 
     // Runs respective UCI commands
-    void go(SearchLimits limits);
+    void go(Search::SearchLimits limits);
     void stop();
     void traceEval();
 

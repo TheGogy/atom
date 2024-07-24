@@ -104,7 +104,7 @@ void Engine::loadSmallNetFromFile(const std::string& path) {
 //  For more info, see uci.cpp
 //
 
-void Engine::go(SearchLimits limits) {
+void Engine::go(Search::SearchLimits limits) {
     // TODO: Find the best move! This currently selects a random move
 
     ValueList<Move, MAX_MOVE> moveList;
