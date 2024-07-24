@@ -214,6 +214,7 @@ void Uci::cmdUci() {
     std::cout << std::endl;
     std::cout << "option name EvalFile type string default <inbuilt> " << EvalFileDefaultNameBig << std::endl;
     std::cout << "option name EvalFileSmall type string default <inbuilt> " << EvalFileDefaultNameSmall << std::endl;
+    std::cout << "option name Hash type spin default 16 min 1 max 4096" << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
@@ -261,36 +262,38 @@ void Uci::cmdPosition(std::istringstream& is) {
 
 
 void Uci::cmdSetOption(std::istringstream& is) {
-    // +---------------+--------------------------------------+
-    // |  Option       |                Value                 |
-    // +---------------+--------------------------------------+
-    // | EvalFile      | (string) Path to the big NNUE file   |
-    // | EvalFileSmall | (string) Path to the small NNUE file |
-    // +---------------+--------------------------------------+
+    // +---------------+---------------------------------------+
+    // |  Option       |                Value                  |
+    // +---------------+---------------------------------------+
+    // | EvalFile      | (string)  Path to the big NNUE file   |
+    // | EvalFileSmall | (string)  Path to the small NNUE file |
+    // | Hash          | (spin)    Hash size, in MB            |
+    // +---------------+---------------------------------------+
 
-    std::string token, optName, optValue;
+    // Do not change the options mid search
+    engine.waitForSearchFinish();
+
+    std::string token, optName, value;
     is >> token;
     if (token != "name") {
-        std::cout << "Error: Must specify option name" << std::endl;
+        std::cout << "Error: unknown format. Should use 'setoption name <option> ...'" << std::endl;
         return;
     }
 
-    // Consume actual option part
-    is >> token;
-    if (token == "EvalFile") {
+    is >> optName;
+    is >> value;
+
+    if (value == "value") {
         is >> token;
-        if (token != "value") std::cout << "Error: Must specify value" << std::endl;
-        is >> token;
-        engine.loadBigNetFromFile(token);
+        if (optName == "EvalFile") {
+            engine.loadBigNetFromFile(token);
+        } else if (optName == "EvalFileSmall") {
+            engine.loadSmallNetFromFile(token);
+        } else if (optName == "Hash") {
+            engine.setHashSize(std::stoi(token));
+        }
     }
 
-    is >> token;
-    if (token == "EvalFileSmall") {
-        is >> token;
-        if (token != "value") std::cout << "Error: Must specify value" << std::endl;
-        is >> token;
-        engine.loadSmallNetFromFile(token);
-    }
 }
 
 Search::SearchLimits Uci::parseGoLimits(std::istringstream& is) {

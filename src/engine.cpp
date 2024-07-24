@@ -27,15 +27,11 @@ Engine::Engine() :
 }
 
 
-// Engine destructor. Should exit all threads and free all memory.
-Engine::~Engine() {
-    // TODO: Collect all threads and terminate engine
-}
-
-
 // Clears everything and sets a new game
 void Engine::newGame() {
     pos.setFromFEN(STARTPOS_FEN);
+    tt.clear();
+    threads.clearThreads();
 }
 
 
@@ -130,5 +126,9 @@ void Engine::traceEval() {
     // TODO: Return string detailing eval from all eval sources
 }
 
+
+void Engine::waitForSearchFinish() {
+    threads.firstThread()->waitForFinish();
+}
 
 } // namespace Atom

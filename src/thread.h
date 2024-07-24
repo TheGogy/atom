@@ -1,12 +1,13 @@
 #ifndef THREAD_H
 #define THREAD_H
 
-#include "search.h"
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
 
+#include "search.h"
 
 namespace Atom {
 
@@ -17,7 +18,9 @@ public:
 
     void search();
     void clear();
-    void lock();
+
+    void waitForFinish();
+    bool isSearching() { return searching; }
 
     size_t id() const { return idx; }
 
@@ -26,9 +29,12 @@ public:
 private:
     size_t idx;
 
-    std::mutex mutex;
+    std::mutex              mutex;
+    std::condition_variable cv;
+    std::thread             thread;
+
     bool shouldExit;
-    std::thread thread;
+    bool searching = true;
 };
 
 
@@ -44,6 +50,7 @@ public:
     ThreadPool &operator=(ThreadPool &&)      = delete;
 
     void clearThreads();
+    Thread* firstThread() const { return threads.front().get(); }
 
   private:
     std::vector<std::unique_ptr<Thread>> threads;

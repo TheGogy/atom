@@ -12,13 +12,15 @@ namespace Atom {
 
 using TTKey = uint64_t;
 
-static constexpr uint8_t ENTRIES_PER_CLUSTER = 3;
-static constexpr uint8_t DEPTH_DELTA = -3;
-static constexpr uint8_t BOUND_MASK  = 0b00000011;
-static constexpr uint8_t PV_MASK     = 0b00000100;
-static constexpr uint8_t AGE_MASK    = 0b11111000;
-static constexpr int     AGE_DELTA   = 0x8;
-static constexpr int     AGE_CYCLE   = 0xFF + AGE_DELTA;
+constexpr size_t TT_DEFAULT_SIZE = 16;
+
+constexpr uint8_t ENTRIES_PER_CLUSTER = 3;
+constexpr uint8_t DEPTH_DELTA = -3;
+constexpr uint8_t BOUND_MASK  = 0b00000011;
+constexpr uint8_t PV_MASK     = 0b00000100;
+constexpr uint8_t AGE_MASK    = 0b11111000;
+constexpr int     AGE_DELTA   = 0x8;
+constexpr int     AGE_CYCLE   = 0xFF + AGE_DELTA;
 
 struct TTData {
     Move  move;
@@ -105,7 +107,10 @@ class TTCluster {
 
 class TranspositionTable {
 public:
-    TranspositionTable(size_t sizeInMb);
+    TranspositionTable(size_t sizeInMb = TT_DEFAULT_SIZE) : table(nullptr), nClusters(0), age(0) {
+        resize(sizeInMb);
+    };
+
     ~TranspositionTable() { aligned_large_pages_free(table); }
 
     inline TTEntry* lookup(const TTKey key) const {

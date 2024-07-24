@@ -9,6 +9,8 @@
 #include "bitboard.h"
 #include "nnue/network.h"
 #include "search.h"
+#include "thread.h"
+#include "tt.h"
 #include "types.h"
 
 namespace Atom {
@@ -27,17 +29,15 @@ struct EngineInfo {
 class Engine {
 public:
 
-    Engine();       // Constructor
-    ~Engine();      // Destructor
-
-    void newGame(); // Reset everything
+    Engine();                              // Constructor
+    ~Engine() { waitForSearchFinish(); }   // Destructor
 
     void setPosition(const std::string& fen, const std::vector<std::string>& moves);
 
     // Debugging
-    void runPerft(int depth);                         // Runs perft (performance test)
-    std::string getDebugInfo();                       // Returns debug info for the position
-    std::string getFen() const { return pos.fen(); }  // Returns the FEN of the position
+    void runPerft(int depth);
+    std::string getDebugInfo();
+    std::string getFen() const { return pos.fen(); }
 
     // Returns a visualization of various bitboards
     std::string visualizePinOrtho()   { return visualizeBB(pos.pinOrtho());   }
@@ -56,10 +56,21 @@ public:
     void go(Search::SearchLimits limits);
     void stop();
     void traceEval();
+    void newGame();
+
+    // Transposition table
+    inline void setHashSize(size_t newSize) { tt.resize(newSize); }
+
+    // Search
+    void waitForSearchFinish();
+    inline bool isSearching() { return threads.firstThread()->isSearching(); }
 
 private:
     Position pos;
+
+    ThreadPool threads;
     NNUE::Networks networks;
+    TranspositionTable tt;
 };
 
 } // namespace Atom
