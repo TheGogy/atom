@@ -57,9 +57,11 @@ public:
     void stop();
     void traceEval();
     void newGame();
+    void clear();
 
-    // Transposition table
+    // Set aspects of engine
     inline void setHashSize(size_t newSize) { tt.resize(newSize); }
+    inline void setNbThreads(size_t nbThreads) { threads.setNbThreads(nbThreads); }
 
     // Search
     void waitForSearchFinish();

@@ -10,6 +10,7 @@
 #include "perft.h"
 #include "position.h"
 #include "search.h"
+#include "thread.h"
 #include "types.h"
 #include "uci.h"
 
@@ -24,6 +25,7 @@ Engine::Engine() :
         )
     ) {
     loadNetworks();
+    threads.setNbThreads(NB_THREADS_DEFAULT);
 }
 
 
@@ -129,6 +131,13 @@ void Engine::traceEval() {
 
 void Engine::waitForSearchFinish() {
     threads.firstThread()->waitForFinish();
+}
+
+
+void Engine::clear() {
+    waitForSearchFinish();
+    tt.clear();
+    threads.clearThreads();
 }
 
 } // namespace Atom

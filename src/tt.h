@@ -107,14 +107,14 @@ class TTCluster {
 
 class TranspositionTable {
 public:
-    TranspositionTable(size_t sizeInMb = TT_DEFAULT_SIZE) : table(nullptr), nClusters(0), age(0) {
+    TranspositionTable(size_t sizeInMb = TT_DEFAULT_SIZE) : table(nullptr), nbClusters(0), age(0) {
         resize(sizeInMb);
     };
 
     ~TranspositionTable() { aligned_large_pages_free(table); }
 
     inline TTEntry* lookup(const TTKey key) const {
-        return &table[((unsigned __int128)key * (unsigned __int128)nClusters) >> 64].entries[0];
+        return &table[((unsigned __int128)key * (unsigned __int128)nbClusters) >> 64].entries[0];
     }
 
     inline void prefetch(TTKey key) const { __builtin_prefetch(lookup(key)); }
@@ -126,12 +126,12 @@ public:
     void   clear();
     void   resize(size_t newSize);
 
-    inline size_t size() const { return nClusters; }
+    inline size_t size() const { return nbClusters; }
     inline void onNewSearch() { age += AGE_DELTA; }
 
 private:
     TTCluster* table;
-    size_t     nClusters;
+    size_t     nbClusters;
     uint8_t    age;
 };
 

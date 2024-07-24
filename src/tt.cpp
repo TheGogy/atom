@@ -85,15 +85,15 @@ int TranspositionTable::hashfull() const {
 
 void TranspositionTable::clear() {
     age = 0;
-    std::memset(table, 0, nClusters * sizeof(TTCluster));
+    std::memset(table, 0, nbClusters * sizeof(TTCluster));
 }
 
 
 void TranspositionTable::resize(size_t newSize) {
     aligned_large_pages_free(table);
 
-    nClusters = (newSize * 1024 * 1024) / sizeof(TTCluster);
-    table = static_cast<TTCluster*>(aligned_large_pages_alloc(nClusters * sizeof(TTCluster)));
+    nbClusters = (newSize * 1024 * 1024) / sizeof(TTCluster);
+    table = static_cast<TTCluster*>(aligned_large_pages_alloc(nbClusters * sizeof(TTCluster)));
 
     if (!table) {
         std::cerr << "Failed to allocate transposition table with " << newSize << "MB." << std::endl;

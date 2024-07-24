@@ -215,6 +215,7 @@ void Uci::cmdUci() {
     std::cout << "option name EvalFile type string default <inbuilt> " << EvalFileDefaultNameBig << std::endl;
     std::cout << "option name EvalFileSmall type string default <inbuilt> " << EvalFileDefaultNameSmall << std::endl;
     std::cout << "option name Hash type spin default 16 min 1 max 4096" << std::endl;
+    std::cout << "option name Clear Hash type button" << std::endl;
     std::cout << "uciok" << std::endl;
 }
 
@@ -262,13 +263,18 @@ void Uci::cmdPosition(std::istringstream& is) {
 
 
 void Uci::cmdSetOption(std::istringstream& is) {
-    // +---------------+---------------------------------------+
-    // |  Option       |                Value                  |
-    // +---------------+---------------------------------------+
-    // | EvalFile      | (string)  Path to the big NNUE file   |
-    // | EvalFileSmall | (string)  Path to the small NNUE file |
-    // | Hash          | (spin)    Hash size, in MB            |
-    // +---------------+---------------------------------------+
+    // +---------------+---------------------------------------+---------------+
+    // |  Option       |                Value                  |    Default    |
+    // +---------------+---------------------------------------+---------------+
+    // | EvalFile      | (string)  Path to the big NNUE file   | <inbuilt>     |
+    // | EvalFileSmall | (string)  Path to the small NNUE file | <inbuilt>     |
+    // | Hash          | (spin)    Hash size, in MB            | 16            |
+    // | ClearHash     | (button)  Clears the hash             |               |
+    // | Threads       | (spin)    Number of threads to use    | 1             |
+    // +---------------+---------------------------------------+---------------+
+
+    // INFO: The logic here may need to be reworked should we decide to add any options
+    // that contain spaces in the name.
 
     // Do not change the options mid search
     engine.waitForSearchFinish();
@@ -291,7 +297,14 @@ void Uci::cmdSetOption(std::istringstream& is) {
             engine.loadSmallNetFromFile(token);
         } else if (optName == "Hash") {
             engine.setHashSize(std::stoi(token));
+        } else if (optName == "Threads") {
+            engine.setNbThreads(std::stoi(token));
+        } else {
+            std::cout << "Error: Unknown option name." << std::endl;
         }
+        return;
+    } else if (value == "ClearHash") {
+        engine.clear();
     }
 
 }

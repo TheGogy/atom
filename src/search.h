@@ -25,6 +25,7 @@ inline TimePoint now() {
 
 namespace Search {
 
+
 struct SearchLimits {
     std::vector<std::string> searchMoves;
     TimePoint time[COLOR_NB], inc[COLOR_NB];
@@ -33,6 +34,7 @@ struct SearchLimits {
     uint64_t nodes;
     int depth, mate, movesToGo;
 };
+
 
 struct SearchWorkerShared {
     SearchWorkerShared(
@@ -46,6 +48,7 @@ struct SearchWorkerShared {
     const NNUE::Networks& networks;
 };
 
+
 class SearchWorker {
 public:
     SearchWorker( SearchWorkerShared& );
@@ -58,7 +61,9 @@ private:
     NNUE::AccumulatorCaches cacheTable;
 };
 
+
 } // namespace Search
+
 
 } // namespace Atom
 
