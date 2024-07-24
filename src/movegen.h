@@ -7,11 +7,14 @@
 namespace Atom {
 
 
+using MoveList = ValueList<Move, MAX_MOVE>;
+
+
+namespace Movegen {
+
+
 #define ENUMERATE_MOVES(...) if (!__VA_ARGS__) return false
 #define HANDLE_MOVE(...)     if (!handler(__VA_ARGS__)) return false
-
-
-using MoveList = ValueList<Move, MAX_MOVE>;
 
 
 // Differentiate between different types of move. This allows
@@ -478,6 +481,8 @@ inline bool enumerateLegalMoves(const Position &pos, const Handler& handler) {
 
 #undef ENUMERATE_MOVES
 #undef HANDLE_MOVE
+
+} // namespace Movegen
 
 } // namespace Atom
 

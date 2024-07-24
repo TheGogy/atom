@@ -4,7 +4,6 @@
 #include "types.h"
 #include "uci.h"
 
-#include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <fstream>
@@ -19,7 +18,7 @@ std::uint64_t perft(Position &pos, int depth) {
     MoveList moves;
 
     if (!Div && depth <= 1) {
-        enumerateLegalMoves<Me>(pos, [&](Move m) {
+        Movegen::enumerateLegalMoves<Me>(pos, [&](Move m) {
             ++total;
             return true;
         });
@@ -27,7 +26,7 @@ std::uint64_t perft(Position &pos, int depth) {
         return total;
     }
 
-    enumerateLegalMoves<Me>(pos, [&](Move move) {
+    Movegen::enumerateLegalMoves<Me>(pos, [&](Move move) {
         std::uint64_t n = 0;
 
         if (Div && depth == 1) {

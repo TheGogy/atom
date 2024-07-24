@@ -73,7 +73,7 @@ std::string Uci::formatMove(Move m) {
 Move Uci::toMove(const Position &pos, std::string moveStr) {
     Move m = MOVE_NULL;
 
-    enumerateLegalMoves(pos, [&](Move move) {
+    Movegen::enumerateLegalMoves(pos, [&](Move move) {
         if (moveStr == formatMove(move)) {
             m = move;
         }

@@ -105,7 +105,7 @@ void Engine::go(Search::SearchLimits limits) {
 
     ValueList<Move, MAX_MOVE> moveList;
 
-    enumerateLegalMoves(pos, [&](Move m) {
+    Movegen::enumerateLegalMoves(pos, [&](Move m) {
         moveList.push_back(m);
         return true;
     });
