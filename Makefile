@@ -6,7 +6,7 @@ SRC_DIRS := src src/incbin src/nnue src/nnue/features src/nnue/layers
 SOURCES := $(wildcard $(addsuffix /*.cpp,$(SRC_DIRS)))
 OBJECTS := $(SOURCES:.cpp=.o)
 
-COMMONFLAGS  := -Wall -std=c++20 -fno-rtti
+COMMONFLAGS  := -Wall -std=c++20 -fno-rtti -lpthread -DUSE_PTHREADS
 SSE2FLAGS    := $(COMMONFLAGS) -msse2 -DUSE_SSE -DUSE_SSE2
 SSE4FLAGS    := $(SSE2FLAGS) -msse3 -msse4 -msse4.1 -mpopcnt -DUSE_SSE41 -DUSE_POPCNT
 AVX2FLAGS    := $(SSE4FLAGS) -mavx2 -DUSE_AVX2
@@ -22,7 +22,7 @@ LDFLAGS := $($(CPUFLAGS))
 DEBUG_CXXFLAGS := $(CXXFLAGS) -g -O0 -DDEBUG
 DEBUG_LDFLAGS := $(LDFLAGS)
 
-RELEASE_CXXFLAGS := $(CXXFLAGS) -O3 -funroll-loops -finline-functions -finline-limit=1000 -fomit-frame-pointer -flto -ftree-vectorize -fprefetch-loop-arrays -fpeel-loops -funroll-all-loops -march=native -DNDEBUG -mtune=native
+RELEASE_CXXFLAGS := $(CXXFLAGS) -O3 -funroll-loops -finline-functions -finline-limit=1000 -fomit-frame-pointer -flto -flto-partition=one -flto=jobserver -ftree-vectorize -fprefetch-loop-arrays -fpeel-loops -funroll-all-loops -march=native -DNDEBUG -mtune=native
 RELEASE_LDFLAGS := $(LDFLAGS) -flto -s -static
 
 PROFILE_CXXFLAGS := $(CXXFLAGS) $(RELEASE_CXXFLAGS) -g

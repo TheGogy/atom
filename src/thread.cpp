@@ -1,10 +1,19 @@
 
 #include "thread.h"
 #include "search.h"
+#include "types.h"
+#include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 
 namespace Atom {
+
+Thread::~Thread() {
+    shouldExit = true;
+    search();
+    thread.join();
+}
 
 void Thread::search() {
     std::unique_lock<std::mutex> lock(mutex);
@@ -50,6 +59,30 @@ void Thread::waitForFinish() {
 }
 
 
+void ThreadPool::startSearch() {
+    for (std::unique_ptr<Thread>& thread : threads) {
+        if (thread != threads.front()) thread->search();
+    }
+}
+
+
+void ThreadPool::waitForFinish() {
+    for (std::unique_ptr<Thread>& thread : threads) {
+        if (thread != threads.front()) thread->waitForFinish();
+    }
+}
+
+
+void ThreadPool::clearThreads() {
+    if (threads.size() == 0) return;
+
+    for (std::unique_ptr<Thread>& thread: threads) {
+        thread->clear();
+        thread->waitForFinish();
+    }
+}
+
+
 void ThreadPool::setNbThreads(size_t nbThreads) {
     // Wait for existing threads to finish
     if (!threads.empty()) {
@@ -61,17 +94,56 @@ void ThreadPool::setNbThreads(size_t nbThreads) {
         return;
     }
 
-    // First thread is the main thread
-    threads.emplace_back(std::make_unique<Thread>(0));
+    for (size_t i = 0; i < nbThreads; ++i) {
+        threads.emplace_back(std::make_unique<Thread>(i));
+    }
 }
 
-void ThreadPool::clearThreads() {
-    if (threads.size() == 0) return;
 
-    for (std::unique_ptr<Thread>& thread: threads) {
-        thread->clear();
-        thread->waitForFinish();
+Thread* ThreadPool::bestThread() const {
+
+    Thread* bestThread = firstThread();
+
+    for (const std::unique_ptr<Thread>& newThread : threads) {
+        const Value maxScore = bestThread->worker->getRootMove(0).score;
+        const Depth maxDepth = bestThread->worker->getRootMove(0).selDepth;
+
+        const Value newScore = newThread->worker->getRootMove(0).score;
+        const Depth newDepth = newThread->worker->getRootMove(0).selDepth;
+
+        // If thread has an equal depth and greater score (or possible mate) it is better.
+        if ((newScore > maxScore)
+        &&  (newDepth == maxDepth || newScore > VALUE_MATE_IN_MAX_PLY)) {
+            bestThread = newThread.get();
+        }
+
+        // If thread has a greater depth + score (without replacing a closer mate) it is better.
+        if ((newDepth > maxDepth)
+        && (newScore > maxScore || maxScore < VALUE_MATE_IN_MAX_PLY)) {
+            bestThread = newThread.get();
+        }
+
     }
+
+    return bestThread;
+}
+
+
+uint64_t ThreadPool::totalNodesSearched() const {
+    uint64_t sum = 0;
+    for (const std::unique_ptr<Thread>& thread : threads) {
+        sum += thread->worker->getNodes();
+    }
+    return sum;
+}
+
+
+uint64_t ThreadPool::totalTbHits() const {
+    uint64_t sum = 0;
+    for (const std::unique_ptr<Thread>& thread : threads) {
+        sum += thread->worker->getTbHits();
+    }
+    return sum;
 }
 
 } // namespace Atom

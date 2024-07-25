@@ -1,7 +1,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <sstream>
+#include <string>
 #include <string_view>
 
 #include "uci.h"
@@ -115,6 +117,35 @@ int Uci::toCentipawns(Value v, const Position &pos) {
 }
 
 
+std::string Uci::formatScore(const Value& score, const Position& pos) {
+    constexpr int TB_TO_CP = 20000;
+
+    assert(-VALUE_INFINITE < score && VALUE_INFINITE > score);
+
+    const Value absScore = abs(score);
+
+    // Regular score
+    if (absScore < VALUE_TB_WIN_IN_MAX_PLY) {
+        Value val = Uci::toCentipawns(score, pos);
+        return std::string("cp ") + std::to_string(val);
+    }
+
+    // Tablebase score
+    else if (absScore <= VALUE_TB) {
+        int ply   = VALUE_TB - absScore;
+        Value val = score > 0 ? TB_TO_CP - ply : -TB_TO_CP + ply;
+        return std::string("cp ") + std::to_string(val);
+    }
+
+    // Forced checkmate
+    else {
+        int ply = VALUE_MATE - absScore;
+        int val = score > 0 ? ((ply + 1) / 2) : (ply / 2);
+        return std::string("mate ") + std::to_string(val);
+    }
+}
+
+
 //
 // UCI callbacks
 //
@@ -126,7 +157,7 @@ void Uci::callbackBestMove(const std::string_view bestmove, const std::string_vi
 }
 
 
-void Uci::callbackInfo(const EngineInfo info) {
+void Uci::callbackInfo(const Search::SearchInfo info) {
     std::stringstream ss;
 
     ss << "info";
@@ -136,6 +167,7 @@ void Uci::callbackInfo(const EngineInfo info) {
        << " nodes "    << info.nodesSearched
        << " nps "      << (info.nodesSearched * 1000) / info.timeSearched
        << " hashfull " << info.hashFull
+       << " tbhits "   << info.tbHits
        << " time "     << info.timeSearched
        << " pv "       << info.pv;
 

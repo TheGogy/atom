@@ -15,17 +15,6 @@
 
 namespace Atom {
 
-struct EngineInfo {
-    int depth;
-    int selDepth;
-    size_t timeSearched;
-    size_t nodesSearched;
-    std::string_view pv;
-    Value score;
-    int hashFull;
-};
-
-
 class Engine {
 public:
 
