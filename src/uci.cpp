@@ -62,7 +62,7 @@ std::string Uci::formatMove(Move m) {
 
     std::string str = formatSquare(moveFrom(m)) + formatSquare(moveTo(m));
 
-    if (moveType(m) == PROMOTION) {
+    if (moveTypeOf(m) == MT_PROMOTION) {
         str += "?pnbrq?"[movePromotionType(m)];
     }
 

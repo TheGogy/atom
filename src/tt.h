@@ -28,6 +28,13 @@ struct TTData {
     Depth depth;
     Bound bound;
     bool  isPv;
+
+    inline Value getAdjustedScore(int ply) {
+        return score ==  VALUE_NONE ? VALUE_NONE
+             : score >=  VALUE_MATE_IN_MAX_PLY ? score - ply
+             : score <= -VALUE_MATE_IN_MAX_PLY ? score + ply
+             : score;
+    }
 };
 
 
@@ -67,16 +74,16 @@ struct TTEntry {
         );
     }
 
-private:
-    friend class TranspositionTable;
+    private:
+      friend class TranspositionTable;
 
-    // Keep these in this order
-    uint16_t key16;
-    uint8_t  depth8;
-    uint8_t  age8;
-    Move     move16;
-    int16_t  score16;
-    int16_t  eval16;
+      // Keep these in this order
+      uint16_t key16;
+      uint8_t depth8;
+      uint8_t age8;
+      Move move16;
+      int16_t score16;
+      int16_t eval16;
 };
 
 
@@ -126,8 +133,10 @@ public:
     void   clear();
     void   resize(size_t newSize);
 
-    inline size_t size() const { return nbClusters; }
     inline void onNewSearch() { age += AGE_DELTA; }
+
+    inline size_t  size()   const { return nbClusters; }
+    inline uint8_t getAge() const { return age; }
 
 private:
     TTCluster* table;

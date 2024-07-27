@@ -70,8 +70,9 @@ inline Bitboard allPawnAttacks(Bitboard b) {
 
 
 // Returns a bitboard of the pawn attacks for a single square and color.
-inline Bitboard pawnAttacks(Color c, Square sq) {
-    return PAWN_ATTACK[c][sq];
+template<Color Me>
+inline Bitboard pawnAttacks(Square sq) {
+    return PAWN_ATTACK[Me][sq];
 }
 
 

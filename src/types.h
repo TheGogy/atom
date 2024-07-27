@@ -1,6 +1,7 @@
 #ifndef TYPES_H
 #define TYPES_H
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -25,10 +26,10 @@ enum Move : uint16_t {
 
 
 enum MoveType {
-    NORMAL,
-    PROMOTION = 1 << 14,
-    EN_PASSANT = 2 << 14,
-    CASTLING  = 3 << 14
+    MT_NORMAL,
+    MT_PROMOTION  = 1 << 14,
+    MT_EN_PASSANT = 2 << 14,
+    MT_CASTLING   = 3 << 14
 };
 
 
@@ -269,6 +270,10 @@ constexpr bool isValidPiece(Piece p) {
     }
 }
 
+constexpr bool isValidMove(Move m) {
+    return (m != MOVE_NONE) && (m != MOVE_NULL);
+}
+
 
 // Get square information
 constexpr File fileOf(Square sq) { return File(sq & 7); }
@@ -300,7 +305,7 @@ constexpr Move makeMove(Square from, Square to, PieceType promotionPiece = KNIGH
 constexpr Square moveTo(Move m)       { return Square(m & 0x3F); }
 constexpr Square moveFrom(Move m)     { return Square((m >> 6) & 0x3F); }
 constexpr uint16_t moveFromTo(Move m) { return m & 0xFFF; }
-constexpr MoveType moveType(Move m)   { return MoveType(m & (3 << 14)); }
+constexpr MoveType moveTypeOf(Move m)   { return MoveType(m & (3 << 14)); }
 constexpr PieceType movePromotionType(Move m) { return PieceType(((m >> 12) & 3) + KNIGHT); }
 
 
@@ -309,11 +314,11 @@ constexpr Piece makePiece(Color side, PieceType p) { return Piece((side << 3) + 
 
 
 // Get piece information
-constexpr PieceType typeOf(Piece p)   { return PieceType(p & 7); }
-constexpr Color sideOf(Piece p)        { return Color(p >> 3); }
+constexpr PieceType typeOf(Piece p)    { return PieceType(p & 7); }
+constexpr Color colorOf(Piece p)       { return Color(p >> 3); }
 
 
-constexpr Direction pawnDirection(Color s) { return s == WHITE ? NORTH : SOUTH; }
+constexpr Direction pawnDirection(Color c) { return c == WHITE ? NORTH : SOUTH; }
 
 // Operations on bitboards and squares
 inline Bitboard operator&   (Bitboard b, Square s)  { return b & sqToBB(s); }
@@ -333,21 +338,34 @@ class ValueList {
 public:
     ValueList() noexcept: size_(0) {}
 
-    // Get data from start and end
+    inline ValueList(std::initializer_list<Tn> il) {
+        copy(il.begin(), il.end(), begin());
+        size_ = il.end() - il.begin();
+    }
+    inline ValueList(ValueList const &vl)            = default;
+    inline ValueList(ValueList&&)                    = default;
+    inline ValueList& operator=(ValueList const &ml) = default;
+    inline ValueList& operator=(ValueList&&)         = default;
+
+    // Get data from list itself
     const Tn* begin() const { return &data_[0]; };
     const Tn* end()   const { return data_ + size_; };
-
-    // Get data from specific point
     const Tn &operator[](int i) const { return data_[i]; }
 
-    // Get other data about vector
-    inline bool isEmpty()        const { return size_ == 0; }
+    Tn* begin() { return &data_[0]; };
+    Tn* end()   { return data_ + size_; };
+    Tn &operator[](int i) { return data_[i]; }
+
+    // Get metadata about vector
+    inline bool empty()        const { return size_ == 0; }
     inline std::size_t size()    const { return size_; }
     inline std::size_t maxsize() const { return MaxSize; }
 
     // Functions
     inline void clear() { size_ = 0; }
     inline void push_back(const Tn& element) { data_[size_++] = element; }
+    inline void pop_back() { size_--; }
+    inline void resize(size_t newSize) { assert(newSize <= size_); size_ = newSize; }
 
 private:
     Tn data_[MaxSize];
@@ -398,6 +416,11 @@ constexpr Value VALUE_KNIGHT = 781;
 constexpr Value VALUE_BISHOP = 825;
 constexpr Value VALUE_ROOK   = 1276;
 constexpr Value VALUE_QUEEN  = 2538;
+
+constexpr Value PIECE_VALUE[PIECE_NB] = {
+    VALUE_ZERO, VALUE_PAWN, VALUE_KNIGHT, VALUE_BISHOP, VALUE_ROOK, VALUE_QUEEN, VALUE_ZERO, VALUE_ZERO,
+    VALUE_ZERO, VALUE_PAWN, VALUE_KNIGHT, VALUE_BISHOP, VALUE_ROOK, VALUE_QUEEN, VALUE_ZERO, VALUE_ZERO
+};
 
 } // namespace Atom
 

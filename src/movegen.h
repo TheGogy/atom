@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include "position.h"
+#include <cstdint>
 
 namespace Atom {
 
@@ -19,17 +20,19 @@ namespace Movegen {
 
 // Differentiate between different types of move. This allows
 // us to generate only specific move types.
-enum MoveGenType {
-    QUIET_MOVES = 1,
-    TACTICAL_MOVES = 2,
-    ALL_MOVES = QUIET_MOVES | TACTICAL_MOVES,
+enum MoveGenType : uint8_t {
+    MG_TYPE_QUIET    = 1,
+    MG_TYPE_TACTICAL = 2,
+    MG_TYPE_EVASIONS = 4,
+
+    MG_TYPE_ALL = MG_TYPE_QUIET | MG_TYPE_TACTICAL | MG_TYPE_EVASIONS,
 };
 
 
 // Enumerate a single promotion move
 template<Color Me, PieceType PromotionType, typename Handler>
 inline bool enumeratePromotion(Square from, Square to, const Handler& handler) {
-    HANDLE_MOVE(makeMove<PROMOTION>(from, to, PromotionType));
+    HANDLE_MOVE(makeMove<MT_PROMOTION>(from, to, PromotionType));
     return true;
 }
 
@@ -38,13 +41,13 @@ inline bool enumeratePromotion(Square from, Square to, const Handler& handler) {
 // This is for all piece types.
 // Queens are regarded as tactical;
 // Rooks, Knights and Bishops are regarded as quiet.
-template<Color Me, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, MoveGenType MgType = MG_TYPE_ALL, typename Handler>
 inline bool enumeratePromotions(Square from, Square to, const Handler& handler) {
-    if constexpr (MGType & TACTICAL_MOVES) {
+    if constexpr (MgType & MG_TYPE_TACTICAL) {
         ENUMERATE_MOVES(enumeratePromotion<Me, QUEEN>(from, to, handler));
     }
 
-    if constexpr (MGType & QUIET_MOVES) {
+    if constexpr (MgType & MG_TYPE_QUIET) {
         ENUMERATE_MOVES(enumeratePromotion<Me, KNIGHT>(from, to, handler));
         ENUMERATE_MOVES(enumeratePromotion<Me, ROOK>(from, to, handler));
         ENUMERATE_MOVES(enumeratePromotion<Me, BISHOP>(from, to, handler));
@@ -56,7 +59,7 @@ inline bool enumeratePromotions(Square from, Square to, const Handler& handler) 
 
 // Enumerates all pawn promotion moves, including checks.
 // This is for all pawns on the promotion rank.
-template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, bool InCheck, MoveGenType MgType = MG_TYPE_ALL, typename Handler>
 inline bool enumeratePawnPromotionMoves(const Position &pos, Bitboard source, const Handler& handler) {
     constexpr Color Opp = ~Me;
 
@@ -86,7 +89,7 @@ inline bool enumeratePawnPromotionMoves(const Position &pos, Bitboard source, co
             Bitboard capLPromotions = (shift<UpLeft>(pawnsCanPromote & ~pinDiag)  | (shift<UpLeft>(pawnsCanPromote & pinDiag) & pinDiag)) & pos.getPiecesBB(Opp);
             Bitboard capRPromotions = (shift<UpRight>(pawnsCanPromote & ~pinDiag) | (shift<UpRight>(pawnsCanPromote & pinDiag) & pinDiag)) & pos.getPiecesBB(Opp);
 
-            if constexpr (InCheck) {
+            if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) {
                 capLPromotions &= checkMask;
                 capRPromotions &= checkMask;
             }
@@ -94,12 +97,12 @@ inline bool enumeratePawnPromotionMoves(const Position &pos, Bitboard source, co
             bitloop(capLPromotions) {
                 Square to = bitscan(capLPromotions);
                 Square from = to - UpLeft;
-                ENUMERATE_MOVES(enumeratePromotions<Me, MGType>(from, to, handler));
+                ENUMERATE_MOVES(enumeratePromotions<Me, MgType>(from, to, handler));
             }
             bitloop(capRPromotions) {
                 Square to = bitscan(capRPromotions);
                 Square from = to - UpRight;
-                ENUMERATE_MOVES(enumeratePromotions<Me, MGType>(from, to, handler));
+                ENUMERATE_MOVES(enumeratePromotions<Me, MgType>(from, to, handler));
             }
         }
 
@@ -115,7 +118,7 @@ inline bool enumeratePawnPromotionMoves(const Position &pos, Bitboard source, co
             bitloop(quietPromotions) {
                 Square to = bitscan(quietPromotions);
                 Square from = to - Up;
-                ENUMERATE_MOVES(enumeratePromotions<Me, MGType>(from, to, handler));
+                ENUMERATE_MOVES(enumeratePromotions<Me, MgType>(from, to, handler));
             }
         }
     }
@@ -125,7 +128,7 @@ inline bool enumeratePawnPromotionMoves(const Position &pos, Bitboard source, co
 
 
 // Enumerate pawn en passant moves.
-template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, bool InCheck, MoveGenType MgType = MG_TYPE_ALL, typename Handler>
 inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, const Handler& handler) {
     constexpr Color Opp = ~Me;
     constexpr Direction pawnDir = pawnDirection(Me);
@@ -141,7 +144,7 @@ inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, co
         const Bitboard epcaptured = sqToBB(pos.getEpSquare() - pawnDir);
 
         // Our pieces that can take through en passant. Orthogonally pinned pawns cannot take.
-        Bitboard enpassants = pawnAttacks(Opp, pos.getEpSquare()) & source & ~pinOrtho;
+        Bitboard enpassants = pawnAttacks<Opp>(pos.getEpSquare()) & source & ~pinOrtho;
 
         if constexpr (InCheck) {
             // If we are in check, we should only add the checkmask if it is not the e.p.
@@ -168,7 +171,7 @@ inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, co
             if (!((epRank & pos.getPiecesBB(Me, KING)) && (epRank & pos.getPiecesBB(Opp, ROOK, QUEEN))) ||
                 !(attacks<ROOK>(pos.getKingSquare(Me), pos.getPiecesBB() ^ sqToBB(from) ^ epcaptured) & pos.getPiecesBB(Opp, ROOK, QUEEN))) {
                 Square to = pos.getEpSquare();
-                HANDLE_MOVE(makeMove<EN_PASSANT>(from, to));
+                HANDLE_MOVE(makeMove<MT_EN_PASSANT>(from, to));
             }
         }
     }
@@ -179,7 +182,7 @@ inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, co
 
 // Generate normal pawn moves.
 // This includes normal pushes and captures.
-template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, bool InCheck, MoveGenType MgType = MG_TYPE_ALL, typename Handler>
 inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const Handler& handler) {
     constexpr Color Opp = ~Me;
     constexpr Bitboard Rank3 = (Me == WHITE) ? RANK_3_BB : RANK_6_BB;
@@ -194,7 +197,7 @@ inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const
     Bitboard checkMask = pos.checkMask();
 
     // Single & Double Push
-    if constexpr (MGType & QUIET_MOVES) {
+    if constexpr (MgType & MG_TYPE_QUIET) {
 
         // Diagonally pinned pawns can never push, as that would be an orthogonal move.
         Bitboard pawns = source & ~Rank7 & ~pinDiag;
@@ -220,7 +223,7 @@ inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const
     }
 
     // Normal Capture
-    if constexpr (MGType & TACTICAL_MOVES) {
+    if constexpr (MgType & MG_TYPE_TACTICAL) {
         // Orthogonally pinned pawns cannot take, as that would be a diagonal move.
         Bitboard pawns = source & ~Rank7 & ~pinOrtho;
         Bitboard capL = (shift<UpLeft>(pawns & ~pinDiag)  | (shift<UpLeft>(pawns & pinDiag) & pinDiag)) & pos.getPiecesBB(Opp);
@@ -248,13 +251,13 @@ inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const
 
 
 // Enumerates all pawn moves.
-template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, bool InCheck, MoveGenType MgType = MG_TYPE_ALL, typename Handler>
 inline bool enumeratePawnMoves(const Position &pos, Bitboard source, const Handler& handler) {
-    ENUMERATE_MOVES(enumeratePawnNormalMoves<Me, InCheck, MGType, Handler>(pos, source, handler));
-    ENUMERATE_MOVES(enumeratePawnPromotionMoves<Me, InCheck, MGType, Handler>(pos, source, handler));
+    ENUMERATE_MOVES(enumeratePawnNormalMoves<Me, InCheck, MgType, Handler>(pos, source, handler));
+    ENUMERATE_MOVES(enumeratePawnPromotionMoves<Me, InCheck, MgType, Handler>(pos, source, handler));
 
-    if constexpr (MGType & TACTICAL_MOVES) {
-        ENUMERATE_MOVES(enumeratePawnEnpassantMoves<Me, InCheck, MGType, Handler>(pos, source, handler));
+    if constexpr (MgType & MG_TYPE_TACTICAL) {
+        ENUMERATE_MOVES(enumeratePawnEnpassantMoves<Me, InCheck, MgType, Handler>(pos, source, handler));
     }
 
     return true;
@@ -264,22 +267,22 @@ inline bool enumeratePawnMoves(const Position &pos, Bitboard source, const Handl
 // Enumerates all castling moves.
 template<Color Me, typename Handler>
 inline bool enumerateCastlingMoves(const Position &pos, const Handler& handler) {
-    Square kingSquare = pos.getKingSquare(Me);
+    Square ksq = pos.getKingSquare(Me);
     const CastlingRight kingSide  = Me & KING_SIDE;
     const CastlingRight queenSide = Me & QUEEN_SIDE;
 
     // King side castling
     if (pos.canCastle(kingSide) && pos.isEmpty(CastlingPath[kingSide]) && !(pos.threatened() & CastlingKingPath[kingSide])) {
-        Square from = kingSquare;
+        Square from = ksq;
         Square to = CastlingKingTo[kingSide];
-        HANDLE_MOVE(makeMove<CASTLING>(from, to));
+        HANDLE_MOVE(makeMove<MT_CASTLING>(from, to));
     }
 
     // Queen side castling
     if (pos.canCastle(queenSide) && pos.isEmpty(CastlingPath[queenSide]) && !(pos.threatened() & CastlingKingPath[queenSide])) {
-        Square from = kingSquare;
+        Square from = ksq;
         Square to = CastlingKingTo[queenSide];
-        HANDLE_MOVE(makeMove<CASTLING>(from, to));
+        HANDLE_MOVE(makeMove<MT_CASTLING>(from, to));
     }
 
     return true;
@@ -287,14 +290,12 @@ inline bool enumerateCastlingMoves(const Position &pos, const Handler& handler) 
 
 
 // Enumerates all king moves.
-template<Color Me, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, MoveGenType MgType = MG_TYPE_ALL, typename Handler>
 inline bool enumerateKingMoves(const Position &pos, Square from, const Handler& handler) {
     Bitboard dest = attacks<KING>(from) & ~pos.getPiecesBB(Me) & ~pos.threatened();
 
-    // For quiet moves, do not add captures.
-    if constexpr (MGType == QUIET_MOVES) dest &= ~pos.getPiecesBB(~Me);
-    // For tactical moves, add captures.
-    if constexpr (MGType == TACTICAL_MOVES) dest &= pos.getPiecesBB(~Me);
+    if constexpr (MgType == MG_TYPE_QUIET)    dest &= ~pos.getPiecesBB(~Me);
+    if constexpr (MgType == MG_TYPE_TACTICAL) dest &=  pos.getPiecesBB(~Me);
 
     bitloop(dest) {
         Square to = bitscan(dest);
@@ -306,7 +307,7 @@ inline bool enumerateKingMoves(const Position &pos, Square from, const Handler& 
 
 
 // Enumerate all knight moves.
-template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, bool InCheck, MoveGenType MgType = MG_TYPE_ALL, typename Handler>
 inline bool enumerateKnightMoves(const Position &pos, Bitboard source, const Handler& handler) {
 
     // Pinned knights can never move: their moves are both orthogonal *and* diagonal, so filter
@@ -319,9 +320,9 @@ inline bool enumerateKnightMoves(const Position &pos, Bitboard source, const Han
         const Square from = bitscan(knights);
         Bitboard dest = attacks<KNIGHT>(from) & ~pos.getPiecesBB(Me);
 
-        if constexpr (InCheck) dest &= pos.checkMask();
-        if constexpr (MGType == TACTICAL_MOVES) dest &= pos.getPiecesBB(~Me);
-        if constexpr (MGType == QUIET_MOVES) dest &= ~pos.getPiecesBB(~Me);
+        if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) dest &= pos.checkMask();
+        if constexpr (MgType == MG_TYPE_TACTICAL)            dest &= pos.getPiecesBB(~Me);
+        if constexpr (MgType == MG_TYPE_QUIET)               dest &= ~pos.getPiecesBB(~Me);
 
         bitloop(dest) {
             Square to = bitscan(dest);
@@ -334,8 +335,8 @@ inline bool enumerateKnightMoves(const Position &pos, Bitboard source, const Han
 
 
 // Enumerate all bishop + diagonal queen moves.
-template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
-inline bool enumerateBishopSliderMoves(const Position &pos, Bitboard source, const Handler& handler) {
+template<Color Me, bool InCheck, MoveGenType MgType = MG_TYPE_ALL, typename Handler>
+inline bool enumerateDiagSliderMoves(const Position &pos, Bitboard source, const Handler& handler) {
     const Bitboard oppPiecesBB = pos.getPiecesBB(~Me);
 
     // Orthogonally pinned bishops + queens cannot move (diagonally),
@@ -351,9 +352,9 @@ inline bool enumerateBishopSliderMoves(const Position &pos, Bitboard source, con
         Square from = bitscan(pieces);
         Bitboard dest = attacks<BISHOP>(from, pos.getPiecesBB()) & ~pos.getPiecesBB(Me);
 
-        if constexpr (InCheck) dest &= pos.checkMask();
-        if constexpr (MGType == TACTICAL_MOVES) dest &= oppPiecesBB;
-        if constexpr (MGType == QUIET_MOVES)    dest &= ~oppPiecesBB;
+        if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) dest &= pos.checkMask();
+        if constexpr (MgType == MG_TYPE_TACTICAL)            dest &=  oppPiecesBB;
+        if constexpr (MgType == MG_TYPE_QUIET)               dest &= ~oppPiecesBB;
 
         bitloop(dest) {
             Square to = bitscan(dest);
@@ -370,9 +371,9 @@ inline bool enumerateBishopSliderMoves(const Position &pos, Bitboard source, con
         // https://lichess.org/editor/8/4k1b1/8/4B3/8/2K5/8/8_w_-_-_0_1?color=white
         Bitboard dest = attacks<BISHOP>(from, pos.getPiecesBB()) & ~pos.getPiecesBB(Me) & pos.pinDiag();
 
-        if constexpr (InCheck) dest &= pos.checkMask();
-        if constexpr (MGType == TACTICAL_MOVES) dest &= oppPiecesBB;
-        if constexpr (MGType == QUIET_MOVES) dest &= ~oppPiecesBB;
+        if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) dest &= pos.checkMask();
+        if constexpr (MgType == MG_TYPE_TACTICAL)            dest &=  oppPiecesBB;
+        if constexpr (MgType == MG_TYPE_QUIET)               dest &= ~oppPiecesBB;
 
         bitloop(dest) {
             Square to = bitscan(dest);
@@ -385,8 +386,8 @@ inline bool enumerateBishopSliderMoves(const Position &pos, Bitboard source, con
 
 
 // Enumerate all rook + orthogonal queen moves.
-template<Color Me, bool InCheck, MoveGenType MGType = ALL_MOVES, typename Handler>
-inline bool enumerateRookSliderMoves(const Position &pos, Bitboard source, const Handler& handler) {
+template<Color Me, bool InCheck, MoveGenType MgType = MG_TYPE_ALL, typename Handler>
+inline bool enumerateOrthoSliderMoves(const Position &pos, Bitboard source, const Handler& handler) {
     const Bitboard oppPiecesBB = pos.getPiecesBB(~Me);
 
     // Diagonally pinned rooks + queens cannot move (orthogonally),
@@ -402,9 +403,9 @@ inline bool enumerateRookSliderMoves(const Position &pos, Bitboard source, const
         Square from = bitscan(pieces);
         Bitboard dest = attacks<ROOK>(from, pos.getPiecesBB()) & ~pos.getPiecesBB(Me);
 
-        if constexpr (InCheck) dest &= pos.checkMask();
-        if constexpr (MGType == TACTICAL_MOVES) dest &= oppPiecesBB;
-        if constexpr (MGType == QUIET_MOVES) dest &= ~oppPiecesBB;
+        if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) dest &= pos.checkMask();
+        if constexpr (MgType == MG_TYPE_TACTICAL)            dest &=  oppPiecesBB;
+        if constexpr (MgType == MG_TYPE_QUIET)               dest &= ~oppPiecesBB;
 
         bitloop(dest) {
             Square to = bitscan(dest);
@@ -420,9 +421,9 @@ inline bool enumerateRookSliderMoves(const Position &pos, Bitboard source, const
         // https://lichess.org/editor/8/4k3/8/2K1R1r1/8/8/8/8_w_-_-_0_1?color=white
         Bitboard dest = attacks<ROOK>(from, pos.getPiecesBB()) & ~pos.getPiecesBB(Me) & pos.pinOrtho();
 
-        if constexpr (InCheck) dest &= pos.checkMask();
-        if constexpr (MGType == TACTICAL_MOVES) dest &= oppPiecesBB;
-        if constexpr (MGType == QUIET_MOVES) dest &= ~oppPiecesBB;
+        if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) dest &= pos.checkMask();
+        if constexpr (MgType == MG_TYPE_TACTICAL)            dest &=  oppPiecesBB;
+        if constexpr (MgType == MG_TYPE_QUIET)               dest &= ~oppPiecesBB;
 
         bitloop(dest) {
             Square to = bitscan(dest);
@@ -435,36 +436,36 @@ inline bool enumerateRookSliderMoves(const Position &pos, Bitboard source, const
 
 
 // Enumerates all legal moves within and calls the handler callback on each legal move found.
-template<Color Me, MoveGenType MGType = ALL_MOVES, typename Handler>
+template<Color Me, MoveGenType MgType = MG_TYPE_ALL, typename Handler>
 inline bool enumerateLegalMoves(const Position &pos, const Handler& handler) {
     switch(pos.nCheckers()) {
 
         case 0:
             // No pieces checking us: we can make all moves
-            ENUMERATE_MOVES(enumeratePawnMoves<Me, false, MGType, Handler>(pos, pos.getPiecesBB(Me, PAWN), handler));
-            ENUMERATE_MOVES(enumerateKnightMoves<Me, false, MGType, Handler>(pos, pos.getPiecesBB(Me, KNIGHT), handler));
-            ENUMERATE_MOVES(enumerateBishopSliderMoves<Me, false, MGType, Handler>(pos, pos.getPiecesBB(Me, BISHOP, QUEEN), handler));
-            ENUMERATE_MOVES(enumerateRookSliderMoves<Me, false, MGType, Handler>(pos, pos.getPiecesBB(Me, ROOK, QUEEN), handler));
-            if constexpr (MGType & QUIET_MOVES) ENUMERATE_MOVES(enumerateCastlingMoves<Me, Handler>(pos, handler));
-            ENUMERATE_MOVES(enumerateKingMoves<Me, MGType, Handler>(pos, pos.getKingSquare(Me), handler));
+            ENUMERATE_MOVES(enumeratePawnMoves<Me, false, MgType, Handler>(pos, pos.getPiecesBB(Me, PAWN), handler));
+            ENUMERATE_MOVES(enumerateKnightMoves<Me, false, MgType, Handler>(pos, pos.getPiecesBB(Me, KNIGHT), handler));
+            ENUMERATE_MOVES(enumerateDiagSliderMoves<Me, false, MgType, Handler>(pos, pos.getPiecesBB(Me, BISHOP, QUEEN), handler));
+            ENUMERATE_MOVES(enumerateOrthoSliderMoves<Me, false, MgType, Handler>(pos, pos.getPiecesBB(Me, ROOK, QUEEN), handler));
+            if constexpr (MgType & MG_TYPE_QUIET) ENUMERATE_MOVES(enumerateCastlingMoves<Me, Handler>(pos, handler));
+            ENUMERATE_MOVES(enumerateKingMoves<Me, MgType, Handler>(pos, pos.getKingSquare(Me), handler));
 
             return true;
 
 
         case 1:
             // One piece checking us: we can make all moves in the checkmask
-            ENUMERATE_MOVES(enumeratePawnMoves<Me, true, ALL_MOVES, Handler>(pos, pos.getPiecesBB(Me, PAWN), handler));
-            ENUMERATE_MOVES(enumerateKnightMoves<Me, true, ALL_MOVES, Handler>(pos, pos.getPiecesBB(Me, KNIGHT), handler));
-            ENUMERATE_MOVES(enumerateBishopSliderMoves<Me, true, ALL_MOVES, Handler>(pos, pos.getPiecesBB(Me, BISHOP, QUEEN), handler));
-            ENUMERATE_MOVES(enumerateRookSliderMoves<Me, true, ALL_MOVES, Handler>(pos, pos.getPiecesBB(Me, ROOK, QUEEN), handler));
-            ENUMERATE_MOVES(enumerateKingMoves<Me, ALL_MOVES, Handler>(pos, pos.getKingSquare(Me), handler));
+            ENUMERATE_MOVES(enumeratePawnMoves<Me, true, MgType, Handler>(pos, pos.getPiecesBB(Me, PAWN), handler));
+            ENUMERATE_MOVES(enumerateKnightMoves<Me, true, MgType, Handler>(pos, pos.getPiecesBB(Me, KNIGHT), handler));
+            ENUMERATE_MOVES(enumerateDiagSliderMoves<Me, true, MgType, Handler>(pos, pos.getPiecesBB(Me, BISHOP, QUEEN), handler));
+            ENUMERATE_MOVES(enumerateOrthoSliderMoves<Me, true, MgType, Handler>(pos, pos.getPiecesBB(Me, ROOK, QUEEN), handler));
+            ENUMERATE_MOVES(enumerateKingMoves<Me, MgType, Handler>(pos, pos.getKingSquare(Me), handler));
 
             return true;
 
 
         default: //case 2:
             // Two pieces checking us: we can't block the check or take both pieces: we can only move the king
-            ENUMERATE_MOVES(enumerateKingMoves<Me, ALL_MOVES, Handler>(pos, pos.getKingSquare(Me), handler));
+            ENUMERATE_MOVES(enumerateKingMoves<Me, MgType, Handler>(pos, pos.getKingSquare(Me), handler));
 
             return true;
     }
@@ -472,11 +473,11 @@ inline bool enumerateLegalMoves(const Position &pos, const Handler& handler) {
 
 
 // Enumerates all legal moves within and calls the handler callback on each legal move found.
-template<MoveGenType MGType = ALL_MOVES, typename Handler>
+template<MoveGenType MgType = MG_TYPE_ALL, typename Handler>
 inline bool enumerateLegalMoves(const Position &pos, const Handler& handler) {
     return pos.getSideToMove() == WHITE
-            ? enumerateLegalMoves<WHITE, MGType, Handler>(pos, handler)
-            : enumerateLegalMoves<BLACK, MGType, Handler>(pos, handler);
+            ? enumerateLegalMoves<WHITE, MgType, Handler>(pos, handler)
+            : enumerateLegalMoves<BLACK, MgType, Handler>(pos, handler);
 }
 
 #undef ENUMERATE_MOVES

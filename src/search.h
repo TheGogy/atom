@@ -11,6 +11,7 @@
 #include "nnue/network.h"
 #include "nnue/nnue_accumulator.h"
 #include "tt.h"
+#include "tunables.h"
 #include "types.h"
 
 namespace Atom {
@@ -31,6 +32,29 @@ class TranspositionTable;
 
 
 namespace Search {
+
+// Some small functions to calculate values used in search
+
+inline Value clampEval(Value eval) {
+    return std::clamp(eval, VALUE_TB_LOSS_IN_MAX_PLY + 1, VALUE_TB_WIN_IN_MAX_PLY - 1);
+}
+
+
+inline Value futilityMargin(Depth depth, bool ttCut, bool improving, bool oppWorsening, int statScore) {
+    Value futility     = Tunables::FUTILITY_MULT_BASE + ttCut * Tunables::FUTILITY_TTCUT_IMPACT;
+    Value improvement  = improving    * futility * Tunables::FUTILITY_IMPROVEMENT_SCALE;
+    Value worsening    = oppWorsening * futility / Tunables::FUTILITY_WORSENING_SCALE;
+    Value statScoreAdj = statScore / Tunables::FUTILITY_STAT_SCALE;
+
+    return (futility * depth) - improvement - worsening - statScoreAdj;
+}
+
+
+inline Depth getNullMoveReductionAmount(Value eval, int beta, Depth depth) {
+    return std::min((eval - beta) / Tunables::NMR_EVAL_SCALE, Tunables::NMR_EVAL_MAX_DIFF)
+           + (depth / Tunables::NMR_DEPTH_SCALE) + Tunables::NMR_MIN_REDUCTION;
+}
+
 
 struct SearchInfo {
     int depth;
@@ -86,23 +110,45 @@ struct RootMove {
     RootMove(Move m) {
         pv.push_back(m);
     }
-    Value score = -VALUE_INFINITE;
-    Depth selDepth = 0;
+
+    // Used for sorting
+
+    bool operator== (const Move& m) const { return pv[0] == m; }
+    bool operator<  (const RootMove& rm) const {
+        return rm.score == score ? rm.prevScore < prevScore : rm.score < score;
+    }
+
+    Value score     = -VALUE_INFINITE;
+    Value prevScore = -VALUE_INFINITE;
+    Value avgScore  = -VALUE_INFINITE;
+    Depth selDepth  = 0;
     MoveList pv;
 };
 
 using RootMoveList = ValueList<RootMove, MAX_MOVE>;
 
-
 enum NodeType {
-    PV,
-    NON_PV,
-    ROOT
+    NODETYPE_PV,
+    NODETYPE_NON_PV,
+    NODETYPE_ROOT
+};
+
+
+struct StackObject {
+    Move*   pv;
+    int     ply;
+    Value   staticEval;
+    Move    currentMove;
+    Move    killer;
+    bool    inCheck, ttHit, ttPv;
+    int     statScore;
 };
 
 
 class SearchWorker {
 public:
+    void clear();
+
     SearchWorker(SearchWorkerShared& sharedState, size_t idx) :
         idx(idx),
         maxDepth(sharedState.maxDepth),
@@ -116,12 +162,10 @@ public:
         clear();
     }
 
-    void clear();
-
     void onNewPv(
-        SearchWorker bestWorker,
+        SearchWorker& bestWorker,
         const ThreadPool& threads,
-        const TranspositionTable tt,
+        const TranspositionTable& tt,
         Depth depth
     );
 
@@ -135,20 +179,30 @@ public:
 private:
     friend class ThreadPool;
 
+    // Searching functions
     inline void iterativeDeepening() {
         rootPosition.getSideToMove() == WHITE ? iterativeDeepening<WHITE>() : iterativeDeepening<BLACK>();
     }
     template<Color Me> void iterativeDeepening();
 
-    template<Color Me, NodeType Nt> Value pvSearch();
-    template<Color Me, NodeType Nt> Value qSearch();
+    template<Color Me, NodeType Nt>
+    Value pvSearch(
+        Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth, bool cutNode
+    );
+
+    template<Color Me, NodeType Nt> 
+    Value qSearch(
+        Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth
+    );
 
     size_t   idx;
     Position rootPosition;
-    Depth    currentDepth, searchDepth, completedDepth, selDepth;
+    RootMoveList rootMoves;
+
+    Depth    currentDepth, searchDepth, completedDepth, selDepth, nmpCutoff;
+
     const Depth maxDepth, maxDepthMate;
     const bool isInfinite;
-    RootMoveList rootMoves;
 
     ThreadPool&             threads;
     TranspositionTable&     tt;

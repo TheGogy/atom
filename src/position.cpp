@@ -1,10 +1,13 @@
 
 #include "position.h"
 #include "bitboard.h"
+#include "movegen.h"
+#include "tt.h"
 #include "types.h"
 #include "zobrist.h"
 #include "uci.h"
 
+#include <cstddef>
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -100,7 +103,7 @@ inline void Position::updatePinsAndCheckMask() {
 
     // Pawns and knights
     if constexpr (InCheck) {
-        checkmask = (pawnAttacks(Me, ksq) & getPiecesBB(Opp, PAWN))
+        checkmask = (pawnAttacks<Me>(ksq) & getPiecesBB(Opp, PAWN))
                   | (attacks<KNIGHT>(ksq) & getPiecesBB(Opp, KNIGHT));
     }
 
@@ -153,7 +156,7 @@ inline void Position::updateCheckers() {
     constexpr Color Opp = ~Me;
     const Bitboard occ = getPiecesBB();
 
-    state->checkers = ((pawnAttacks(Me, ksq) & getPiecesBB(Opp, PAWN))
+    state->checkers = ((pawnAttacks<Me>(ksq) & getPiecesBB(Opp, PAWN))
         | (attacks<KNIGHT>(ksq) & getPiecesBB(Opp, KNIGHT))
         | (attacks<BISHOP>(ksq, occ) & getPiecesBB(Opp, BISHOP, QUEEN))
         | (attacks<ROOK>(ksq, occ) & getPiecesBB(Opp, ROOK, QUEEN))
@@ -192,8 +195,8 @@ Bitboard Position::computeHash() const {
 //       . B . . . . . .     0 1 0 0 0 0 0 0
 //       . . . . q . . .     0 0 0 0 1 0 0 0
 inline Bitboard Position::getAttackersTo(const Square s, const Bitboard occ) const {
-    return (pawnAttacks(BLACK, s) & getPiecesBB(WHITE, PAWN))
-         | (pawnAttacks(WHITE, s) & getPiecesBB(BLACK, PAWN))
+    return (pawnAttacks<BLACK>(s) & getPiecesBB(WHITE, PAWN))
+         | (pawnAttacks<WHITE>(s) & getPiecesBB(BLACK, PAWN))
          | (attacks<KNIGHT>(s) & getPiecesBB(KNIGHT))
          | (attacks<ROOK>(s)   & getPiecesBB(ROOK, QUEEN))
          | (attacks<BISHOP>(s) & getPiecesBB(BISHOP, QUEEN))
@@ -299,7 +302,7 @@ bool Position::setFromFEN(const std::string &fen) {
                 return false;
             }
 
-            sideOf(piece) == WHITE ? setPiece<WHITE>(s, piece) : setPiece<BLACK>(s, piece);
+            colorOf(piece) == WHITE ? setPiece<WHITE>(s, piece) : setPiece<BLACK>(s, piece);
             file++;
         }
     }
@@ -490,7 +493,7 @@ void Position::doMove(Move m) {
 
     DirtyPiece& dp = state->dirtyPiece;
 
-    if constexpr (Mt == NORMAL) {
+    if constexpr (Mt == MT_NORMAL) {
         // Handle normal moves
 
         dp.dirty_num = 1;
@@ -523,14 +526,14 @@ void Position::doMove(Move m) {
             if ((int(from) ^ int(to)) == int(NORTH + NORTH)) {
                 const Square epsq = to - pawnDirection(Me);
 
-                if (pawnAttacks(Me, epsq) & getPiecesBB(~Me, PAWN)) {
+                if (pawnAttacks<Me>(epsq) & getPiecesBB(~Me, PAWN)) {
                     hash ^= Zobrist::enpassantKeys[fileOf(epsq)];
                     state->epSquare = epsq;
                 }
             }
         }
 
-    } else if constexpr (Mt == CASTLING) {
+    } else if constexpr (Mt == MT_CASTLING) {
         // Handle castling moves
         CastlingRight cr = Me & (to > from ? KING_SIDE : QUEEN_SIDE);
         const Square rookFrom = CastlingRookFrom[cr];
@@ -557,7 +560,7 @@ void Position::doMove(Move m) {
         state->castlingRights &= ~(CastlingRightsMask[from] | CastlingRightsMask[to]);
         hash ^= Zobrist::castlingKeys[state->castlingRights];
 
-    } else if constexpr (Mt == PROMOTION) {
+    } else if constexpr (Mt == MT_PROMOTION) {
         // Handle pawn promotion moves
         const PieceType promotionType = movePromotionType(m);
         const Piece piecePromotedTo = makePiece(Me, promotionType);
@@ -603,7 +606,7 @@ void Position::doMove(Move m) {
         state->castlingRights &= ~(CastlingRightsMask[from] | CastlingRightsMask[to]);
         hash ^= Zobrist::castlingKeys[state->castlingRights];
 
-    } else if constexpr (Mt == EN_PASSANT) {
+    } else if constexpr (Mt == MT_EN_PASSANT) {
         // Handle en passant captures
         const Square epsq = to - pawnDirection(Me);
 
@@ -634,14 +637,14 @@ void Position::doMove(Move m) {
 }
 
 
-template void Position::doMove<WHITE, NORMAL>(Move m);
-template void Position::doMove<WHITE, PROMOTION>(Move m);
-template void Position::doMove<WHITE, EN_PASSANT>(Move m);
-template void Position::doMove<WHITE, CASTLING>(Move m);
-template void Position::doMove<BLACK, NORMAL>(Move m);
-template void Position::doMove<BLACK, PROMOTION>(Move m);
-template void Position::doMove<BLACK, EN_PASSANT>(Move m);
-template void Position::doMove<BLACK, CASTLING>(Move m);
+template void Position::doMove<WHITE, MT_NORMAL>(Move m);
+template void Position::doMove<WHITE, MT_PROMOTION>(Move m);
+template void Position::doMove<WHITE, MT_EN_PASSANT>(Move m);
+template void Position::doMove<WHITE, MT_CASTLING>(Move m);
+template void Position::doMove<BLACK, MT_NORMAL>(Move m);
+template void Position::doMove<BLACK, MT_PROMOTION>(Move m);
+template void Position::doMove<BLACK, MT_EN_PASSANT>(Move m);
+template void Position::doMove<BLACK, MT_CASTLING>(Move m);
 
 
 // Undoes the given move in the current position and updates the position
@@ -655,27 +658,27 @@ void Position::undoMove(Move m) {
     state--;
     sideToMove = Me;
 
-    if constexpr (Mt == NORMAL) {
+    if constexpr (Mt == MT_NORMAL) {
         movePiece<Me>(to, from);
 
         if (capture != NO_PIECE) {
             setPiece<~Me>(to, capture);
         }
-    } else if constexpr (Mt == CASTLING) {
+    } else if constexpr (Mt == MT_CASTLING) {
         const CastlingRight cr = Me & (to > from ? KING_SIDE : QUEEN_SIDE);
         const Square rookFrom = CastlingRookFrom[cr];
         const Square rookTo = CastlingRookTo[cr];
 
         movePiece<Me>(to, from);
         movePiece<Me>(rookTo, rookFrom);
-    } else if constexpr (Mt == PROMOTION){
+    } else if constexpr (Mt == MT_PROMOTION){
         unsetPiece<Me>(to);
         setPiece<Me>(from, makePiece(Me, PAWN));
 
         if (capture != NO_PIECE) {
             setPiece<~Me>(to, capture);
         }
-    } else if constexpr (Mt == EN_PASSANT) {
+    } else if constexpr (Mt == MT_EN_PASSANT) {
         movePiece<Me>(to, from);
 
         const Square epsq = to - pawnDirection(Me);
@@ -683,14 +686,174 @@ void Position::undoMove(Move m) {
     }
 }
 
-template void Position::undoMove<WHITE, NORMAL>(Move m);
-template void Position::undoMove<WHITE, PROMOTION>(Move m);
-template void Position::undoMove<WHITE, EN_PASSANT>(Move m);
-template void Position::undoMove<WHITE, CASTLING>(Move m);
-template void Position::undoMove<BLACK, NORMAL>(Move m);
-template void Position::undoMove<BLACK, PROMOTION>(Move m);
-template void Position::undoMove<BLACK, EN_PASSANT>(Move m);
-template void Position::undoMove<BLACK, CASTLING>(Move m);
+template void Position::undoMove<WHITE, MT_NORMAL>(Move m);
+template void Position::undoMove<WHITE, MT_PROMOTION>(Move m);
+template void Position::undoMove<WHITE, MT_EN_PASSANT>(Move m);
+template void Position::undoMove<WHITE, MT_CASTLING>(Move m);
+template void Position::undoMove<BLACK, MT_NORMAL>(Move m);
+template void Position::undoMove<BLACK, MT_PROMOTION>(Move m);
+template void Position::undoMove<BLACK, MT_EN_PASSANT>(Move m);
+template void Position::undoMove<BLACK, MT_CASTLING>(Move m);
 
+template<Color Me>
+void Position::doNullMove(BoardState& newState, TranspositionTable& tt) {
+    std::memcpy(&newState, state, offsetof(BoardState, accumulatorBig));
+
+    newState.previous = state;
+    state = &newState;
+
+    state->dirtyPiece.dirty_num = 0;
+    state->dirtyPiece.piece[0]  = NO_PIECE;
+    state->accumulatorBig.computed[WHITE] = state->accumulatorBig.computed[BLACK] =
+        state->accumulatorSmall.computed[WHITE] = state->accumulatorSmall.computed[BLACK] = false;
+
+    state->hash ^= Zobrist::enpassantKeys[fileOf(state->epSquare) + FILE_NB * (state->epSquare == SQ_NONE)];
+    state->epSquare = SQ_NONE;
+
+    state->hash ^= Zobrist::sideToMoveKey;
+    ++state->fiftyMoveRule;
+    tt.prefetch(hash());
+
+    sideToMove = ~Me;
+    updateThreatened<~Me>();
+    state->checkers = EMPTY;
+    updatePinsAndCheckMask<~Me, false>();
+
+}
+
+template void Position::doNullMove<WHITE>(BoardState& newState, TranspositionTable& tt);
+template void Position::doNullMove<BLACK>(BoardState& newState, TranspositionTable& tt);
+
+template<Color Me> void Position::undoNullMove() {
+    state--;
+    sideToMove = Me;
+}
+
+template void Position::undoNullMove<WHITE>();
+template void Position::undoNullMove<BLACK>();
+
+template<Color Me>
+bool Position::isLegalMove(Move m) const {
+    assert(isValidMove(m));
+
+    const Square from = moveFrom(m);
+    const Square to   = moveTo(m);
+    const Piece pc    = getPieceAt(from);
+    const Piece cap   = getPieceAt(to);
+
+    assert(colorOf(pc) == Me);
+
+    const MoveType mt = moveTypeOf(m);
+
+    if (mt == MT_EN_PASSANT) {
+        const Square ksq   = getKingSquare(Me);
+        const Square capsq = to - pawnDirection(Me);
+        const Bitboard occ = (getPiecesBB() ^ from ^ capsq) | to;
+
+        assert(to == getEpSquare());
+        assert(getPieceAt(to) != NO_PIECE);
+
+        return !(attacks<ROOK>(ksq, occ) & getPiecesBB(~Me, QUEEN, ROOK))
+            && !(attacks<BISHOP>(ksq, occ) & getPiecesBB(~Me, QUEEN, BISHOP));
+
+    } else if (mt == MT_CASTLING) {
+        const CastlingRight kingSide  = Me & KING_SIDE;
+        const CastlingRight queenSide = Me & QUEEN_SIDE;
+        return ((canCastle(kingSide) && isEmpty(CastlingPath[kingSide]) && !(threatened() & CastlingKingPath[kingSide]))
+         || (canCastle(queenSide) && isEmpty(CastlingPath[queenSide]) && !(threatened() & CastlingKingPath[queenSide])));
+    }
+
+    if (typeOf(getPieceAt(from)) != KING) {
+        // A non-king move is legal if either:
+        // 1. it is not pinned
+        // 2. it is pinned but remains in the pinmask
+
+        return (
+             to & ~(pinOrtho() | pinDiag())
+         || (to & pinOrtho() && from & pinOrtho())
+         || (to & pinDiag()  && from & pinDiag())
+        );
+    }
+
+    // King moves are legal if the square is not threatened.
+    return !(to & threatened());
+}
+
+template bool Position::isLegalMove<WHITE>(Move m) const;
+template bool Position::isLegalMove<BLACK>(Move m) const;
+
+
+// Test if a move is pseudo-legal. Used for transposition table that may have
+// race conditions where moves might be corrupted.
+template<Color Me>
+bool Position::isPseudoLegalMove(const Move m) const {
+    const Square from = moveFrom(m);
+    const Square to   = moveTo(m);
+    if (from == to) return false;
+
+    const Piece pc    = getPieceAt(from);
+    const Piece cap   = getPieceAt(to);
+
+    if (pc == NO_PIECE || colorOf(pc) != Me || to & getPiecesBB(Me)) return false;
+    if (typeOf(cap) == KING || (cap != NO_PIECE && colorOf(cap) == Me)) return false;
+
+    if (inCheck()) {
+        return cap == NO_PIECE ? isInMoveList<Me, true, false>(m, pc) : isInMoveList<Me, true, true>(m, pc);
+    }
+
+    return cap == NO_PIECE ? isInMoveList<Me, false, false>(m, pc) : isInMoveList<Me, false, true>(m, pc);
+}
+
+
+template bool Position::isPseudoLegalMove<WHITE>(Move m) const;
+template bool Position::isPseudoLegalMove<BLACK>(Move m) const;
+
+
+template<Color Me, bool InCheck, bool IsCapture>
+inline bool Position::isInMoveList(const Move m, const Piece pc) const {
+
+    Square from     = moveFrom(m);
+    Bitboard fromBB = sqToBB(from);
+    PieceType pt    = typeOf(pc);
+
+    switch (moveTypeOf(m)) {
+        case MT_NORMAL:
+            if (nCheckers() > 1 && pt != KING) return false;
+
+            switch (pt) {
+                case PAWN:
+                    return !Movegen::enumeratePawnNormalMoves<Me, InCheck>(*this, fromBB, [m](Move x) { return m != x; } );
+                case KNIGHT:
+                    return !Movegen::enumerateKnightMoves<Me, InCheck>(*this, fromBB, [m](Move x) { return m != x; } );
+                case BISHOP:
+                    return !Movegen::enumerateDiagSliderMoves<Me, InCheck>(*this, fromBB, [m](Move x) { return m != x; } );
+                case ROOK:
+                    return !Movegen::enumerateOrthoSliderMoves<Me, InCheck>(*this, fromBB, [m](Move x) { return m != x; } );
+                case QUEEN:
+                    return !Movegen::enumerateDiagSliderMoves<Me, InCheck>(*this, fromBB, [m](Move x) { return m != x; } )
+                        || !Movegen::enumerateOrthoSliderMoves<Me, InCheck>(*this, fromBB, [m](Move x) { return m != x; } );
+                case KING:
+                    return !Movegen::enumerateKingMoves<Me>(*this, from, [m](Move x) { return m != x; } );
+
+                default:
+                    return false;
+            }
+
+        case MT_CASTLING:
+            if constexpr (InCheck) return false;
+            return !Movegen::enumerateCastlingMoves<Me>(*this, [m](Move x) { return m != x; } );
+
+        case MT_PROMOTION:
+            if (nCheckers() > 1 || pt != PAWN) return false;
+            return !Movegen::enumeratePawnPromotionMoves<Me, InCheck>(*this, fromBB, [m](Move x) { return m != x; } );
+
+        case MT_EN_PASSANT:
+            if (nCheckers() > 1 || pt != PAWN || getEpSquare() != moveTo(m)) return false;
+            return !Movegen::enumeratePawnEnpassantMoves<Me, InCheck>(*this, fromBB, [m](Move x) { return m != x; } );
+
+        default:
+            return false;
+    }
+}
 
 } // namespace Atom

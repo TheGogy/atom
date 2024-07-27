@@ -4,6 +4,7 @@
 #include "bitboard.h"
 #include "nnue/nnue_accumulator.h"
 #include "nnue/nnue_architecture.h"
+#include "tt.h"
 #include "types.h"
 #include "zobrist.h"
 
@@ -69,6 +70,9 @@ public:
     template <Color Me> inline void doMove(Move m);
     template <Color Me> inline void undoMove(Move m);
 
+    template <Color Me> inline void doNullMove(BoardState& newState, TranspositionTable& tt);
+    template <Color Me> inline void undoNullMove();
+
     // Returns position metadata.
     inline Color getSideToMove()  const { return sideToMove; }
     inline int getHalfMoveClock() const { return state->fiftyMoveRule; }
@@ -121,6 +125,7 @@ public:
     inline Bitboard checkers()   const { return state->checkers; }
     inline Bitboard nCheckers()  const { return popcount(state->checkers); }
     inline bool inCheck()        const { return !!state->checkers; }
+    template<Color Me> inline bool hasNonPawnMaterial() { return getPiecesBB(Me, PAWN, KING) != getPiecesBB(Me); }
 
     // Compute / get the hash of the current position.
     uint64_t computeHash() const;
@@ -145,6 +150,30 @@ public:
     inline void setPiece(Square sq, Piece p);
     inline void unsetPiece(Square sq);
 
+    // Check if move is valid
+    template <Color Me> bool isLegalMove(const Move m) const;
+    template <Color Me> bool isPseudoLegalMove(const Move m) const;
+
+    // Check if a piece at a specific square would give check
+    template <Color Me> inline bool wouldGiveCheck(const PieceType pt, const Square to) {
+        assert(pt != KING);
+
+        switch (pt) {
+            case PAWN:
+                return pawnAttacks<Me>(to) & getKingSquare(~Me);
+            case KNIGHT:
+                return attacks<KNIGHT>(to) & getKingSquare(~Me);
+            case BISHOP:
+                return attacks<BISHOP>(to) & getKingSquare(~Me);
+            case ROOK:
+                return attacks<ROOK>(to)   & getKingSquare(~Me);
+            case QUEEN:
+                return attacks<QUEEN>(to)  & getKingSquare(~Me);
+            default:
+                return false;
+        }
+    }
+
 private:
     void setCastlingRights(CastlingRight cr);
 
@@ -161,6 +190,10 @@ private:
 
     inline void updateBitboards();
     template <Color Me> inline void updateBitboards();
+
+    template<Color Me, bool IsInCheck, bool IsCapture>
+    inline bool isInMoveList(const Move m, const Piece pc) const;
+
 
     Piece pieces[SQUARE_NB];            // Array of pieces on the board.
     Bitboard sideBB[COLOR_NB];          // Bitboards for each side.
@@ -215,22 +248,22 @@ inline bool Position::isRepetitionDraw() const {
 // Does the given move for the current position
 template <Color Me>
 inline void Position::doMove(Move m) {
-    switch (moveType(m)) {
-        case NORMAL:     doMove<Me, NORMAL>(m);     return;
-        case CASTLING:   doMove<Me, CASTLING>(m);   return;
-        case PROMOTION:  doMove<Me, PROMOTION>(m);  return;
-        case EN_PASSANT: doMove<Me, EN_PASSANT>(m); return;
+    switch (moveTypeOf(m)) {
+        case MT_NORMAL:     doMove<Me, MT_NORMAL>(m);     return;
+        case MT_CASTLING:   doMove<Me, MT_CASTLING>(m);   return;
+        case MT_PROMOTION:  doMove<Me, MT_PROMOTION>(m);  return;
+        case MT_EN_PASSANT: doMove<Me, MT_EN_PASSANT>(m); return;
     }
 }
 
 // Undoes the given move for the current position
 template <Color Me>
 inline void Position::undoMove(Move m) {
-    switch (moveType(m)) {
-        case NORMAL:     undoMove<Me, NORMAL>(m);     return;
-        case CASTLING:   undoMove<Me, CASTLING>(m);   return;
-        case PROMOTION:  undoMove<Me, PROMOTION>(m);  return;
-        case EN_PASSANT: undoMove<Me, EN_PASSANT>(m); return;
+    switch (moveTypeOf(m)) {
+        case MT_NORMAL:     undoMove<Me, MT_NORMAL>(m);     return;
+        case MT_CASTLING:   undoMove<Me, MT_CASTLING>(m);   return;
+        case MT_PROMOTION:  undoMove<Me, MT_PROMOTION>(m);  return;
+        case MT_EN_PASSANT: undoMove<Me, MT_EN_PASSANT>(m); return;
     }
 }
 
@@ -242,7 +275,7 @@ inline void Position::undoMove(Move m) {
 inline void Position::setPiece(Square sq, Piece p) {
     Bitboard b = sqToBB(sq);
     pieces[sq] = p;
-    sideBB[sideOf(p)]  |= b;
+    sideBB[colorOf(p)]  |= b;
     piecesBB[p] |= b;
 }
 
@@ -255,7 +288,7 @@ inline void Position::unsetPiece(Square sq) {
     Bitboard b = sqToBB(sq);
     Piece p = pieces[sq];
     pieces[sq] = NO_PIECE;
-    sideBB[sideOf(p)]  &= ~b;
+    sideBB[colorOf(p)]  &= ~b;
     piecesBB[p] &= ~b;
 }
 
