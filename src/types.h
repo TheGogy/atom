@@ -1,6 +1,7 @@
 #ifndef TYPES_H
 #define TYPES_H
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -247,7 +248,6 @@ constexpr Bitboard CastlingKingPath[CASTLING_RIGHT_NB] = {
     sqToBB(SQ_E8) | sqToBB(SQ_D8) | sqToBB(SQ_C8)  // Black queenside
 };
 
-
 enum Bound {
     BOUND_NONE,
     BOUND_LOWER,
@@ -292,7 +292,6 @@ constexpr Square createSquare(File f, Rank r) { return Square((r << 3) + f); }
 // Creates a move based on the from and to squares (standard moves)
 constexpr Move makeMove(Square from, Square to) { return Move((from << 6) + to); }
 
-
 // Creates a move based on the from and to squares
 // (special moves: EN_PASSANT, CASTLING, PROMOTION)
 template<MoveType Type>
@@ -320,6 +319,7 @@ constexpr Color colorOf(Piece p)       { return Color(p >> 3); }
 
 constexpr Direction pawnDirection(Color c) { return c == WHITE ? NORTH : SOUTH; }
 
+
 // Operations on bitboards and squares
 inline Bitboard operator&   (Bitboard b, Square s)  { return b & sqToBB(s); }
 inline Bitboard operator|   (Bitboard b, Square s)  { return b | sqToBB(s); }
@@ -331,7 +331,7 @@ inline Bitboard& operator|= (Bitboard& b, Square s) { return b |= sqToBB(s); }
 inline Bitboard& operator^= (Bitboard& b, Square s) { return b ^= sqToBB(s); }
 inline Bitboard  operator|  (Square s1, Square s2)  { return sqToBB(s1) | sqToBB(s2); }
 
-
+//
 // Resizeable vector. Used for move list.
 template <typename Tn, std::size_t MaxSize>
 class ValueList {
@@ -366,11 +366,35 @@ public:
     inline void push_back(const Tn& element) { data_[size_++] = element; }
     inline void pop_back() { size_--; }
     inline void resize(size_t newSize) { assert(newSize <= size_); size_ = newSize; }
+    inline bool contains(const Tn &e) const { return std::find(begin(), end(), e) != end(); }
+    inline bool contains(Tn &e)             { return std::find(begin(), end(), e) != end(); }
 
 private:
     Tn data_[MaxSize];
     std::size_t size_ = 0;
 };
+
+
+using Depth = int;
+using Value = int;
+
+constexpr Depth QSEARCH_DEPTH_NORMAL = -1;
+constexpr Depth QSEARCH_DEPTH_CHECKS =  0;
+
+
+// Scored move (used for move picking)
+struct ScoredMove {
+    inline ScoredMove() {}
+    inline ScoredMove(Move move, Value score) : move(move), score(score) {}
+    Move  move;
+    Value score;
+
+    constexpr explicit operator bool() const { return move != MOVE_NONE; }
+};
+
+inline bool operator<(const ScoredMove& a, const ScoredMove& b) { return a.score < b.score; }
+
+using ScoredMoveList = ValueList<ScoredMove, MAX_MOVE>;
 
 
 // Dirty (moved) piece: Keeps track of the most recently moved piece on the board.
@@ -391,9 +415,6 @@ struct DirtyPiece {
     Square from[3];
     Square to[3];
 };
-
-using Depth = int;
-using Value = int;
 
 constexpr Value VALUE_ZERO     = 0;
 constexpr Value VALUE_DRAW     = 0;

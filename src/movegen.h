@@ -1,6 +1,7 @@
 #ifndef MOVEGEN_H
 #define MOVEGEN_H
 
+#include "bitboard.h"
 #include "types.h"
 #include "position.h"
 #include <cstdint>
@@ -146,7 +147,7 @@ inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, co
         // Our pieces that can take through en passant. Orthogonally pinned pawns cannot take.
         Bitboard enpassants = pawnAttacks<Opp>(pos.getEpSquare()) & source & ~pinOrtho;
 
-        if constexpr (InCheck) {
+        if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) {
             // If we are in check, we should only add the checkmask if it is not the e.p.
             // piece putting us in check, as the en passant piece is not in the checkmask.
             if (!(pos.checkers() & epcaptured)) {
@@ -197,14 +198,14 @@ inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const
     Bitboard checkMask = pos.checkMask();
 
     // Single & Double Push
-    if constexpr (MgType & MG_TYPE_QUIET) {
+    if constexpr (MgType & (MG_TYPE_QUIET | MG_TYPE_EVASIONS)) {
 
         // Diagonally pinned pawns can never push, as that would be an orthogonal move.
         Bitboard pawns = source & ~Rank7 & ~pinDiag;
         Bitboard singlePushes = (shift<Up>(pawns & ~pinOrtho) | (shift<Up>(pawns & pinOrtho) & pinOrtho)) & emptyBB;
         Bitboard doublePushes = shift<Up>(singlePushes & Rank3) & emptyBB;
 
-        if constexpr (InCheck) {
+        if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) {
             singlePushes &= checkMask;
             doublePushes &= checkMask;
         }
@@ -223,13 +224,14 @@ inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const
     }
 
     // Normal Capture
-    if constexpr (MgType & MG_TYPE_TACTICAL) {
+    if constexpr (MgType & MG_TYPE_QUIET || MgType == MG_TYPE_EVASIONS) {
+
         // Orthogonally pinned pawns cannot take, as that would be a diagonal move.
         Bitboard pawns = source & ~Rank7 & ~pinOrtho;
         Bitboard capL = (shift<UpLeft>(pawns & ~pinDiag)  | (shift<UpLeft>(pawns & pinDiag) & pinDiag)) & pos.getPiecesBB(Opp);
         Bitboard capR = (shift<UpRight>(pawns & ~pinDiag) | (shift<UpRight>(pawns & pinDiag) & pinDiag)) & pos.getPiecesBB(Opp);
 
-        if constexpr (InCheck) {
+        if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) {
             capL &= checkMask;
             capR &= checkMask;
         }
@@ -479,6 +481,72 @@ inline bool enumerateLegalMoves(const Position &pos, const Handler& handler) {
             ? enumerateLegalMoves<WHITE, MgType, Handler>(pos, handler)
             : enumerateLegalMoves<BLACK, MgType, Handler>(pos, handler);
 }
+
+// Counts the number of legal moves without enumerating to a list.
+// Used for debugging.
+template<Color Me, MoveGenType MgType = MG_TYPE_ALL>
+inline int countLegalMoves(const Position &pos) {
+    int count = 0;
+    enumerateLegalMoves<Me, MgType>(pos, [&](Move m) {
+        ++count;
+        return true;
+    });
+
+    return count;
+}
+
+
+// Methods to enumerate legal moves (or legal checks only) to list.
+template<Color Me, MoveGenType MgType = MG_TYPE_ALL>
+inline Move* enumerateLegalMovesToList(const Position &pos, Move* movelist) {
+    enumerateLegalMoves<Me, MgType>(pos, [&](Move m) {
+        *movelist++ = m;
+        return true;
+    });
+
+    return movelist;
+}
+
+
+template<Color Me, MoveGenType MgType = MG_TYPE_ALL>
+inline ScoredMove* enumerateLegalMovesToList(const Position &pos, ScoredMove* movelist) {
+
+    enumerateLegalMoves<Me, MgType>(pos, [&](Move m) {
+        *movelist++ = ScoredMove(m, 0);
+        return true;
+    });
+
+    return movelist;
+}
+
+
+template<Color Me, MoveGenType MgType = MG_TYPE_ALL>
+inline Move* enumerateChecksToList(const Position &pos, Move* movelist) {
+
+    enumerateLegalMoves<Me, MgType>(pos, [&](Move m) {
+        if (pos.givesCheck<Me>(m)) {
+            *movelist++ = m;
+        }
+        return true;
+    });
+
+    return movelist;
+}
+
+
+template<Color Me, MoveGenType MgType = MG_TYPE_ALL>
+inline ScoredMove* enumerateChecksToList(const Position &pos, ScoredMove* movelist) {
+
+    enumerateLegalMoves<Me, MgType>(pos, [&](Move m) {
+        if (pos.givesCheck<Me>(m)) {
+            *movelist++ = ScoredMove(m, 0);
+        }
+        return true;
+    });
+
+    return movelist;
+}
+
 
 #undef ENUMERATE_MOVES
 #undef HANDLE_MOVE

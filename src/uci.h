@@ -33,6 +33,7 @@ public:
     // Callbacks for engine
     static void callbackBestMove(const std::string_view bestmove, const std::string_view ponder);
     static void callbackInfo(const Search::SearchInfo info);
+    static void callbackIter(const Depth depth, const Move currmove, const int currmovenumber);
 
 private:
     Engine engine;

@@ -21,14 +21,5 @@ int main (int argc, char *argv[]) {
     Uci uci;
     uci.loop();
 
-    // NNUE::AccumulatorCaches cacheTable = {nnueNets};
-    //
-    // auto [psqtSmall, positionalSmall] = nnueNets.small.evaluate(pos, &cacheTable.small);
-    // auto [psqtBig, positionalBig] = nnueNets.big.evaluate(pos, &cacheTable.big);
-    //
-    // std::cout << "Piece value static eval:  " << Eval::pieceValueEval(pos) << std::endl;
-    // std::cout << "NNUE static eval (small): " << psqtSmall << " (psqt) " << positionalSmall << " (positional)" << std::endl;
-    // std::cout << "NNUE static eval (big):   " << psqtBig << " (psqt) " << positionalBig << " (positional)" << std::endl;
-
     return 0;
 }

@@ -1,11 +1,11 @@
-
-#include "thread.h"
-#include "search.h"
-#include "types.h"
-#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
+
+#include "thread.h"
+#include "movegen.h"
+#include "search.h"
+#include "types.h"
 
 namespace Atom {
 
@@ -59,9 +59,41 @@ void Thread::waitForFinish() {
 }
 
 
-void ThreadPool::startSearch() {
+void ThreadPool::go(
+    Position& pos,
+    Search::SearchLimits limits
+) {
+
+    firstThread()->waitForFinish();
+
+    Search::RootMoveList rootMoves;
+
+    Movegen::enumerateLegalMoves(pos, [&](Move m) {
+        rootMoves.push_back(Search::RootMove(m));
+        return true;
+    });
+
     for (std::unique_ptr<Thread>& thread : threads) {
-        if (thread != threads.front()) thread->search();
+        thread->waitForFinish();
+        thread->setupWorker(pos, rootMoves, limits);
+    }
+
+    // Start first thread searching, this will notify the others.
+    firstThread()->search();
+
+}
+
+
+// Start all threads searching.
+// This should only be invoked once, by the main thread.
+void ThreadPool::startSearching() {
+
+    for (std::unique_ptr<Thread>& thread : threads) {
+        // First thread has called all the other threads: it is
+        // already searching. Call all other threads.
+        if (!(thread->id() == 0)) {
+            thread->search();
+        }
     }
 }
 
@@ -83,7 +115,7 @@ void ThreadPool::clearThreads() {
 }
 
 
-void ThreadPool::setNbThreads(size_t nbThreads) {
+void ThreadPool::setNbThreads(size_t nbThreads, Search::SearchWorkerShared sharedState) {
     // Wait for existing threads to finish
     if (!threads.empty()) {
         firstThread()->waitForFinish();
@@ -95,7 +127,7 @@ void ThreadPool::setNbThreads(size_t nbThreads) {
     }
 
     for (size_t i = 0; i < nbThreads; ++i) {
-        threads.emplace_back(std::make_unique<Thread>(i));
+        threads.emplace_back(std::make_unique<Thread>(i, sharedState));
     }
 }
 

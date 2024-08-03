@@ -18,7 +18,15 @@ constexpr size_t NB_THREADS_DEFAULT = 1;
 
 class Thread {
 public:
-    Thread(size_t index) : idx(index), thread(&Thread::idle, this) {}
+    Thread(
+        size_t index,
+        Search::SearchWorkerShared& sharedState
+    ) :
+        idx(index),
+        thread(&Thread::idle, this)
+    {
+        worker = std::make_unique<Search::SearchWorker>(sharedState, index);
+    }
 
     virtual ~Thread();
 
@@ -33,6 +41,16 @@ public:
 
     std::unique_ptr<Search::SearchWorker> worker;
 
+    void setupWorker(
+        const Position& rootPosition,
+        Search::RootMoveList rootMoves,
+        const Search::SearchLimits limits
+    ) {
+        worker->rootPosition = rootPosition;
+        worker->rootMoves    = rootMoves;
+        worker->limits       = limits;
+    }
+
 private:
     size_t idx;
 
@@ -40,8 +58,8 @@ private:
     std::condition_variable cv;
     std::thread             thread;
 
-    bool shouldExit;
-    bool searching = true;
+    bool shouldExit = false;
+    bool searching  = true;
 };
 
 
@@ -61,10 +79,14 @@ public:
 
     // UCI commands
     void clearThreads();
-    void setNbThreads(size_t nbThreads);
+    void setNbThreads(size_t nbThreads, Search::SearchWorkerShared sharedState);
 
     // Start / stop searching
-    void startSearch();
+    void go(
+        Position& pos,
+        Search::SearchLimits limits
+    );
+    void startSearching();
     void waitForFinish();
 
     // Find specific threads / workers
@@ -86,6 +108,7 @@ public:
 
     // Stop variable
     std::atomic_bool shouldStop;
+    std::atomic_bool abortSearch;
 
 private:
     ThreadList threads;

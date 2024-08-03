@@ -8,6 +8,7 @@
 #include "types.h"
 #include "zobrist.h"
 
+#include <cstdint>
 #include <sstream>
 
 namespace Atom {
@@ -70,8 +71,8 @@ public:
     template <Color Me> inline void doMove(Move m);
     template <Color Me> inline void undoMove(Move m);
 
-    template <Color Me> inline void doNullMove(BoardState& newState, TranspositionTable& tt);
-    template <Color Me> inline void undoNullMove();
+    template <Color Me> void doNullMove(BoardState& newState, TranspositionTable& tt);
+    template <Color Me> void undoNullMove();
 
     // Returns position metadata.
     inline Color getSideToMove()  const { return sideToMove; }
@@ -128,8 +129,10 @@ public:
     template<Color Me> inline bool hasNonPawnMaterial() { return getPiecesBB(Me, PAWN, KING) != getPiecesBB(Me); }
 
     // Compute / get the hash of the current position.
-    uint64_t computeHash() const;
-    inline uint64_t hash() const { return state->hash; }
+    TTKey computeHash() const;
+    inline TTKey hash() const { return state->hash; }
+    inline TTKey hashAfter(const Move m) const;
+    inline TTKey hashAfterNull() const { return hash() ^ Zobrist::sideToMoveKey; }
 
     // Get the size of the current position history.
     inline size_t historySize() const { return state - history; }
@@ -154,25 +157,32 @@ public:
     template <Color Me> bool isLegalMove(const Move m) const;
     template <Color Me> bool isPseudoLegalMove(const Move m) const;
 
-    // Check if a piece at a specific square would give check
-    template <Color Me> inline bool wouldGiveCheck(const PieceType pt, const Square to) {
-        assert(pt != KING);
 
-        switch (pt) {
+    // Static exchange evaluation (SEE).
+    bool see(Move move, int threshold) const;
+
+    // Check to see if a piece can see another piece
+    inline bool pieceSees(const Square seer, const Square victim, const Bitboard occ) const {
+        switch (typeOf(getPieceAt(seer))) {
             case PAWN:
-                return pawnAttacks<Me>(to) & getKingSquare(~Me);
+                return (sideToMove == WHITE ? pawnAttacks<WHITE>(seer) : pawnAttacks<BLACK>(seer)) & victim;
             case KNIGHT:
-                return attacks<KNIGHT>(to) & getKingSquare(~Me);
+                return attacks<KNIGHT>(seer) & victim;
             case BISHOP:
-                return attacks<BISHOP>(to) & getKingSquare(~Me);
+                return attacks<BISHOP>(seer, occ) & victim;
             case ROOK:
-                return attacks<ROOK>(to)   & getKingSquare(~Me);
+                return attacks<ROOK>(seer, occ) & victim;
             case QUEEN:
-                return attacks<QUEEN>(to)  & getKingSquare(~Me);
+                return attacks<QUEEN>(seer, occ) & victim;
+            case KING:
+                return attacks<KING>(seer) & victim;
             default:
                 return false;
         }
     }
+
+    // Check to see if a move gives check
+    template <Color Me> bool givesCheck(const Move m) const;
 
 private:
     void setCastlingRights(CastlingRight cr);
@@ -290,6 +300,23 @@ inline void Position::unsetPiece(Square sq) {
     pieces[sq] = NO_PIECE;
     sideBB[colorOf(p)]  &= ~b;
     piecesBB[p] &= ~b;
+}
+
+
+// Computes what the hash would be if a move is played
+inline TTKey Position::hashAfter(const Move m) const {
+    const Square from = moveFrom(m);
+    const Square to   = moveTo(m);
+    const Piece p     = getPieceAt(from);
+    const Piece cap   = getPieceAt(to);
+    TTKey h           = hash();
+
+    h ^= Zobrist::sideToMoveKey;
+    h ^= Zobrist::keys[p][from] ^ Zobrist::keys[p][to];
+    if (cap != NO_PIECE) 
+        h ^= Zobrist::keys[cap][to];
+
+    return h;
 }
 
 } // namespace Atom

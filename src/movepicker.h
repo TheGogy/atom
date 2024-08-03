@@ -5,6 +5,7 @@
 
 #include "position.h"
 #include "movegen.h"
+#include "types.h"
 
 namespace Atom {
 
@@ -32,8 +33,6 @@ enum class MovePickStage : uint32_t {
     MP_STAGE_QSEARCH_CAP_GOOD,
     MP_STAGE_QSEARCH_CHK_GENERATE,
     MP_STAGE_QSEARCH_CHK_GOOD,
-
-    MP_STAGE_END
 };
 
 
@@ -51,12 +50,12 @@ inline MovePickStage operator+(MovePickStage s, int i) {
 }
 
 
-inline void kSort(Move* start, Move* end, int limit) {
-    for (Move* sortedEnd = start, *current = start + 1; current < end; ++current) {
-        if (*current >= limit) {
-            Move temp = *current;
+inline void kSort(ScoredMove* start, ScoredMove* end, int limit) {
+    for (ScoredMove* sortedEnd = start, *current = start + 1; current < end; ++current) {
+        if (current->score >= limit) {
+            ScoredMove temp = *current;
             *current = *++sortedEnd;
-            Move* insertionPoint = sortedEnd;
+            ScoredMove* insertionPoint = sortedEnd;
             while (insertionPoint != start && *(insertionPoint - 1) < temp) {
                 *insertionPoint = *(insertionPoint - 1);
                 --insertionPoint;
@@ -68,32 +67,22 @@ inline void kSort(Move* start, Move* end, int limit) {
 
 
 enum MovePickType {
-    MP_TYPE_MAIN,
+    MP_TYPE_NEXT,
     MP_TYPE_BEST
 };
 
-
-struct ScoredMove {
-    inline ScoredMove() {}
-    inline ScoredMove(Move move, Value score) : move(move), score(score) {}
-    Move  move;
-    Value score;
-};
-
-inline bool operator<(const ScoredMove& a, const ScoredMove& b) { return a.score < b.score; }
-
-
-using ScoredMoveList = ValueList<ScoredMove, MAX_MOVE>;
-
+template<Color Me>
 class MovePicker {
 public:
-    template<Color Me>
     MovePicker(
         const Position& pos,
         Move  ttMove,
         Move  killer,
         Depth depth
-    );
+    ) : pos(pos), ttMove(ttMove), killer(killer), depth(depth)
+    {
+        mpStage = determineStage(pos.inCheck(), ttMove, depth);
+    }
 
     // MovePicker cannot be copied
     MovePicker(const MovePicker &)            = delete;
@@ -101,16 +90,16 @@ public:
     MovePicker &operator=(const MovePicker &) = delete;
     MovePicker &operator=(MovePicker &&)      = delete;
 
-    Move next();
+    Move nextMove(bool skipQuiet = false);
 
 private:
     const Position& pos;
     Move            ttMove, killer;
     Depth           depth;
-    MovePickStage   stage;
-    ScoredMoveList  movelist;
+    MovePickStage   mpStage;
+    ScoredMove      movelist[MAX_MOVE];
+    ScoredMove      *current, *endMoves, *endBadCaptures, *beginBadQuiets, *endBadQuiets;
 
-    template<Color Me>
     inline MovePickStage determineStage(const bool inCheck, Move ttMove, Depth depth) const {
         if (pos.inCheck()) {
             return MovePickStage::MP_STAGE_EVASION_TT + !(ttMove && pos.isPseudoLegalMove<Me>(ttMove));
@@ -119,8 +108,11 @@ private:
         }
     }
 
-    template<Color Me, Movegen::MoveGenType MgType>
+    template<Movegen::MoveGenType MgType>
     void score();
+
+    template<MovePickType MpType, typename Pred>
+    ScoredMove select(Pred filter);
 };
 
 

@@ -56,6 +56,15 @@ inline Depth getNullMoveReductionAmount(Value eval, int beta, Depth depth) {
 }
 
 
+
+inline void updatePv(Move* pv, Move currentMove, const Move* childPv) {
+    for (*pv++ = currentMove; childPv && *childPv != MOVE_NONE; ) {
+        *pv++ = *childPv++;
+    }
+    *pv = MOVE_NONE;
+}
+
+
 struct SearchInfo {
     int depth;
     int selDepth;
@@ -70,6 +79,13 @@ struct SearchInfo {
 
 
 struct SearchLimits {
+    SearchLimits() {
+        time[WHITE] = time[BLACK] = TimePoint(0);
+        inc[WHITE]  = inc[BLACK]  = TimePoint(0);
+        isInfinite = false;
+        nodes = depth = mate = movesToGo = 0;
+    }
+
     std::vector<std::string> searchMoves;
     TimePoint time[COLOR_NB], inc[COLOR_NB];
     TimePoint startTimePoint, moveTime;
@@ -81,24 +97,15 @@ struct SearchLimits {
 
 struct SearchWorkerShared {
     SearchWorkerShared(
-        Depth maxDepth,
-        Depth maxDepthMate,
-        bool  isInfinite,
         ThreadPool& threadPool,
         NNUE::Networks& NNUEs,
         TranspositionTable& tt
     ) :
-        maxDepth(maxDepth),
-        maxDepthMate(maxDepthMate),
-        isInfinite(isInfinite),
         threads(threadPool),
         networks(NNUEs),
         tt(tt)
     {}
 
-    const Depth             maxDepth;
-    const Depth             maxDepthMate;
-    const bool              isInfinite;
     ThreadPool&             threads;
     const NNUE::Networks&   networks;
     TranspositionTable&     tt;
@@ -114,6 +121,7 @@ struct RootMove {
     // Used for sorting
 
     bool operator== (const Move& m) const { return pv[0] == m; }
+    bool operator== (const RootMove& rm) const { return pv[0] == rm.pv[0]; }
     bool operator<  (const RootMove& rm) const {
         return rm.score == score ? rm.prevScore < prevScore : rm.score < score;
     }
@@ -121,11 +129,13 @@ struct RootMove {
     Value score     = -VALUE_INFINITE;
     Value prevScore = -VALUE_INFINITE;
     Value avgScore  = -VALUE_INFINITE;
+    Value uciScore  = -VALUE_INFINITE;
     Depth selDepth  = 0;
     MoveList pv;
 };
 
 using RootMoveList = ValueList<RootMove, MAX_MOVE>;
+
 
 enum NodeType {
     NODETYPE_PV,
@@ -142,6 +152,7 @@ struct StackObject {
     Move    killer;
     bool    inCheck, ttHit, ttPv;
     int     statScore;
+    int     moveCount;
 };
 
 
@@ -151,9 +162,6 @@ public:
 
     SearchWorker(SearchWorkerShared& sharedState, size_t idx) :
         idx(idx),
-        maxDepth(sharedState.maxDepth),
-        maxDepthMate(sharedState.maxDepthMate),
-        isInfinite(sharedState.isInfinite),
         threads(sharedState.threads),
         tt(sharedState.tt),
         networks(sharedState.networks),
@@ -176,8 +184,13 @@ public:
     inline uint64_t getNodes()  const { return nodes.load(std::memory_order_relaxed);  }
     inline uint64_t getTbHits() const { return tbHits.load(std::memory_order_relaxed); }
 
+    Search::SearchLimits limits;
+    Position rootPosition;
+    RootMoveList rootMoves;
+
 private:
     friend class ThreadPool;
+
 
     // Searching functions
     inline void iterativeDeepening() {
@@ -185,31 +198,39 @@ private:
     }
     template<Color Me> void iterativeDeepening();
 
+
     template<Color Me, NodeType Nt>
     Value pvSearch(
         Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth, bool cutNode
     );
+
 
     template<Color Me, NodeType Nt> 
     Value qSearch(
         Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth
     );
 
+
+    inline int getReduction(bool improving, Depth depth, int moveCount, int delta) {
+        int scale = reductions[depth] * reductions[moveCount];
+        return (
+            (scale + Tunables::REDUCTION_BASE - delta * Tunables::REDUCTION_DELTA_SCALE / rootDelta) / Tunables::REDUCTION_NORMALISER
+          + (!improving && scale > Tunables::REDUCTION_SCALE_THRESHOLD)
+        );
+    }
+
+
     size_t   idx;
-    Position rootPosition;
-    RootMoveList rootMoves;
 
     Depth    currentDepth, searchDepth, completedDepth, selDepth, nmpCutoff;
+    Value    rootDelta;
 
-    const Depth maxDepth, maxDepthMate;
-    const bool isInfinite;
+    std::array<int, MAX_MOVE> reductions;
 
     ThreadPool&             threads;
     TranspositionTable&     tt;
     const NNUE::Networks&   networks;
     NNUE::AccumulatorCaches cacheTable;
-
-    Value bestPrevScore;
 
     std::atomic<uint64_t> nodes, tbHits;
 

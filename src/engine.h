@@ -50,7 +50,7 @@ public:
 
     // Set aspects of engine
     inline void setHashSize(size_t newSize) { tt.resize(newSize); }
-    inline void setNbThreads(size_t nbThreads) { threads.setNbThreads(nbThreads); }
+    inline void setNbThreads(size_t nbThreads) { threads.setNbThreads(nbThreads, {threads, networks, tt}); }
 
     // Search
     void waitForSearchFinish();

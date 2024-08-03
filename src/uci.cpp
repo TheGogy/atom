@@ -174,6 +174,19 @@ void Uci::callbackInfo(const Search::SearchInfo info) {
     std::cout << ss.str() << std::endl;
 }
 
+
+void Uci::callbackIter(const Depth depth, const Move currmove, const int currmovenumber) {
+    std::stringstream ss;
+
+    ss << "info";
+    ss << " depth "          << depth
+       << " currmove "       << Uci::formatMove(currmove)
+       << " currmovenumber " << currmovenumber;
+
+    std::cout << ss.str() << std::endl;
+}
+
+
 //
 //  Main UCI loop.
 //
@@ -244,6 +257,7 @@ void Uci::cmdUci() {
     std::cout << "id name Atom " << ENGINE_VERSION << std::endl;
     std::cout << "id author George Rawlinson and Tomáš Pecher" << std::endl;
     std::cout << std::endl;
+    std::cout << "option name Threads type spin default 1 min 1 max 16" << EvalFileDefaultNameBig << std::endl;
     std::cout << "option name EvalFile type string default <inbuilt> " << EvalFileDefaultNameBig << std::endl;
     std::cout << "option name EvalFileSmall type string default <inbuilt> " << EvalFileDefaultNameSmall << std::endl;
     std::cout << "option name Hash type spin default 16 min 1 max 4096" << std::endl;

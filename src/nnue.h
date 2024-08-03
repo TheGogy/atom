@@ -5,6 +5,7 @@
 
 #include "evaluate.h"
 #include "position.h"
+#include "types.h"
 
 namespace Atom {
 
@@ -20,7 +21,8 @@ struct Networks;
 struct AccumulatorCaches;
 
 inline bool useSmallNet(const Position &pos) {
-    return std::abs(Eval::pieceValueEval(pos)) > 962;
+    const Value pvEval = pos.getSideToMove() == WHITE ? Eval::pieceValueEval<WHITE>(pos) : Eval::pieceValueEval<BLACK>(pos);
+    return std::abs(pvEval) > 962;
 }
 
 } // namespace NNUE

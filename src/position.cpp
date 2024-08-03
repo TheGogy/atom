@@ -8,6 +8,7 @@
 #include "uci.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -181,6 +182,7 @@ Bitboard Position::computeHash() const {
 
     return hash;
 }
+
 
 //
 // Returns a bitboard with 1s set on all squares where there is a piece
@@ -696,11 +698,11 @@ template void Position::undoMove<BLACK, MT_EN_PASSANT>(Move m);
 template void Position::undoMove<BLACK, MT_CASTLING>(Move m);
 
 template<Color Me>
-void Position::doNullMove(BoardState& newState, TranspositionTable& tt) {
-    std::memcpy(&newState, state, offsetof(BoardState, accumulatorBig));
+void Position::doNullMove(BoardState& nullState, TranspositionTable& tt) {
+    std::memcpy(&nullState, state, offsetof(BoardState, accumulatorBig));
 
-    newState.previous = state;
-    state = &newState;
+    nullState.previous = state;
+    state = &nullState;
 
     state->dirtyPiece.dirty_num = 0;
     state->dirtyPiece.piece[0]  = NO_PIECE;
@@ -738,10 +740,8 @@ bool Position::isLegalMove(Move m) const {
 
     const Square from = moveFrom(m);
     const Square to   = moveTo(m);
-    const Piece pc    = getPieceAt(from);
-    const Piece cap   = getPieceAt(to);
 
-    assert(colorOf(pc) == Me);
+    assert(colorOf(   getPieceAt(from)) == Me);
 
     const MoveType mt = moveTypeOf(m);
 
@@ -855,5 +855,144 @@ inline bool Position::isInMoveList(const Move m, const Piece pc) const {
             return false;
     }
 }
+
+
+// Static exchange evaluation (Stockfish). If all the available trades happen in the
+// position, are we winning?
+bool Position::see(Move move, int threshold) const {
+
+    assert(isValidMove(move));
+
+    if (moveTypeOf(move) != MT_NORMAL) {
+        return VALUE_ZERO >= threshold;
+    }
+
+    const Square from = moveFrom(move);
+    const Square to   = moveTo(move);
+
+    Value swap  = PIECE_VALUE[getPieceAt(to)] - threshold;
+    if (swap < 0) return false;
+
+    swap = PIECE_VALUE[getPieceAt(from)] - swap;
+    if (swap <= 0) return false;
+
+    Color stm           = sideToMove;
+    Bitboard occ        = getPiecesBB() ^ from ^ to;
+    Bitboard attackers  = getAttackersTo(to, occ);
+    Bitboard stmAttackers, bb;
+    int result = 1;
+
+    while (true) {
+        stm = ~stm;
+        attackers &= occ;
+
+        // If the side to move has no more attackers, they lose
+        if (!(stmAttackers = attackers & getPiecesBB(stm))) {
+            break;
+        }
+
+        // Remove pinned pieces
+        if (pinDiag() & occ) {
+            stmAttackers &= ~pinDiag();
+        }
+        if (pinOrtho() & occ) {
+            stmAttackers &= ~pinOrtho();
+        }
+
+        // Check we still have more attackers;
+        if (!stmAttackers) break;
+
+        // Flip the result bit
+        result ^= 1;
+
+        // Remove next attacker and add any x-ray attackers behind it to 'attackers'.
+        if ((bb = stmAttackers & getPiecesBB(PAWN))) {
+            if ((swap = VALUE_PAWN - swap) < result) break;
+            occ ^= bitscan(bb);
+            attackers |= attacks<BISHOP>(to, occ) & getPiecesBB(BISHOP, QUEEN);
+
+        } else if ((bb = stmAttackers & getPiecesBB(KNIGHT))) {
+            if ((swap = VALUE_KNIGHT - swap) < result) break;
+            occ ^= bitscan(bb);
+
+        } else if ((bb = stmAttackers & getPiecesBB(BISHOP))) {
+            if ((swap = VALUE_BISHOP - swap) < result) break;
+            occ ^= bitscan(bb);
+            attackers |= attacks<BISHOP>(to, occ) & getPiecesBB(BISHOP, QUEEN);
+
+        } else if ((bb = stmAttackers & getPiecesBB(ROOK))) {
+            if ((swap = VALUE_ROOK - swap) < result) break;
+            occ ^= bitscan(bb);
+            attackers |= attacks<ROOK>(to, occ) & getPiecesBB(ROOK, QUEEN);
+
+        } else if ((bb = stmAttackers & getPiecesBB(QUEEN))) {
+            if ((swap = VALUE_QUEEN - swap) < result) break;
+            occ ^= bitscan(bb);
+            attackers |= (attacks<BISHOP>(to, occ) & getPiecesBB(BISHOP, QUEEN))
+                       | (attacks<ROOK>(to, occ)   & getPiecesBB(ROOK, QUEEN));
+
+        } else { // King
+            // If we have to capture with the king but the opponent still has
+            // attackers, we lost.
+            return (attackers & ~getPiecesBB(stm)) ? result ^ 1 : result;
+        }
+    }
+
+    return bool(result);
+}
+
+
+template<Color Me>
+bool Position::givesCheck(const Move m) const {
+    constexpr Color Opp   = ~Me;
+
+    const Square ksq      = getKingSquare(Opp);
+    const Bitboard kingBB = sqToBB(ksq);
+    const Square from     = moveFrom(m);
+    const Square to       = moveTo(m);
+    const Bitboard occ    = getPiecesBB() ^ from ^ to;
+
+    // Piece itself gives check
+    if (pieceSees(to, ksq, occ)) return true;
+
+    // See if there is a discovered check
+    const Bitboard rqAttack = attacks<ROOK>(to, occ);
+    if ((rqAttack & kingBB) && (rqAttack & getPiecesBB(Me, ROOK, QUEEN))) return true;
+
+    const Bitboard bqAttack = attacks<BISHOP>(to, occ);
+    if ((bqAttack & kingBB) && (bqAttack & getPiecesBB(Me, BISHOP, QUEEN))) return true;
+
+    switch (moveTypeOf(m)) {
+        case MT_NORMAL:
+        case MT_PROMOTION:
+            // Already run all the checks for normal and promotion
+            return false;
+
+        case MT_EN_PASSANT:
+            {
+                // Already checked for the piece itself checking king,
+                // as well as discovered checks - now we need to check for
+                // en passant discovered checks on the same rank.
+                const Square epCapture    = createSquare(fileOf(to), rankOf(from));
+                const Bitboard occAfterEP = (getPiecesBB() ^ from ^ epCapture) | to;
+                constexpr Bitboard epRank = (Me == WHITE ? RANK_5_BB : RANK_4_BB);
+
+                return (
+                    ((kingBB & epRank) && getPiecesBB(Me, ROOK, QUEEN)) // King is on EP rank with ortho slider
+                    && ( attacks<ROOK>(ksq, occAfterEP) & getPiecesBB(Me, ROOK, QUEEN)) // Ortho slider can attack king
+                );
+            }
+        default: // castling
+            // The king can't give check, see if the rook does
+            if constexpr (Me == WHITE) {
+                return attacks<ROOK>(to > from ? SQ_F1 : SQ_D1, occ) & kingBB;
+            } else {
+                return attacks<ROOK>(to > from ? SQ_F8 : SQ_D8, occ) & kingBB;
+            }
+    }
+}
+
+template bool Position::givesCheck<WHITE>(Move m) const;
+template bool Position::givesCheck<BLACK>(Move m) const;
 
 } // namespace Atom

@@ -3,7 +3,6 @@
 #include <vector>
 
 #include "engine.h"
-#include "movegen.h"
 #include "nnue.h"
 #include "nnue/network.h"
 #include "nnue/nnue_misc.h"
@@ -25,7 +24,8 @@ Engine::Engine() :
         )
     ) {
     loadNetworks();
-    threads.setNbThreads(NB_THREADS_DEFAULT);
+    Search::SearchWorkerShared sharedState = {threads, networks, tt};
+    threads.setNbThreads(NB_THREADS_DEFAULT, sharedState);
 }
 
 
@@ -103,23 +103,13 @@ void Engine::loadSmallNetFromFile(const std::string& path) {
 //
 
 void Engine::go(Search::SearchLimits limits) {
-    // TODO: Find the best move! This currently selects a random move
-
-    ValueList<Move, MAX_MOVE> moveList;
-
-    Movegen::enumerateLegalMoves(pos, [&](Move m) {
-        moveList.push_back(m);
-        return true;
-    });
-
-    Move bestMove = moveList[rand() % moveList.size()];
-
-    Uci::callbackBestMove(Uci::formatMove(bestMove), "");
+    verifyNetworks();
+    threads.go(pos, limits);
 }
 
 
 void Engine::stop() {
-    // TODO: Stop all threads and report current bestmove
+    threads.shouldStop = true;
 }
 
 
