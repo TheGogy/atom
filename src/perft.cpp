@@ -10,8 +10,6 @@
 
 namespace Atom {
 
-using std::ifstream;
-
 template <bool Div, Color Me>
 std::uint64_t perft(Position &pos, int depth) {
     std::uint64_t total = 0;
@@ -92,7 +90,7 @@ bool runTest(const std::string &fen, int depth, Bitboard expected_nodes) {
 }
 
 void testFromFile(const std::string &filename) {
-    ifstream file(filename);
+    std::ifstream file(filename);
     if (!file) {
         std::cerr << "Error opening file: " << filename << std::endl;
         return;
