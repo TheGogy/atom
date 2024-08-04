@@ -76,15 +76,15 @@ void perft(Position &pos, int depth) {
     }
 }
 
-bool runTest(const std::string &fen, int depth, Bitboard expected_nodes) {
+bool runTest(const std::string &fen, int depth, Bitboard expected) {
     Position pos;
     pos.setFromFEN(fen);
     Bitboard nodes = perft<false>(pos, depth);
-    if (nodes == expected_nodes) {
+    if (nodes == expected) {
         std::cout << "[PASS] " << fen << std::endl;
         return true;
     } else {
-        std::cout << "[FAIL] " << fen << " || EXPECTED " << expected_nodes << " RETURNED " << nodes << std::endl;
+        std::cout << "[FAIL] " << fen << " || EXPECTED " << expected << " RETURNED " << nodes << std::endl;
         return false;
     }
 }
@@ -96,33 +96,33 @@ void testFromFile(const std::string &filename) {
         return;
     }
 
-    int tests_passed = 0;
-    int total_tests = 0;
-    int lines_tested = 0;
+    int passed = 0;
+    int total = 0;
+    int testedLines = 0;
     std::string line;
 
     while (std::getline(file, line)) {
 
         // Split the line into FEN and perft values
-        std::istringstream line_stream(line);
+        std::istringstream lStream(line);
         std::string fen;
-        if (!std::getline(line_stream, fen, ';')) continue;
+        if (!std::getline(lStream, fen, ';')) continue;
 
         // Print divider
-        std::cout << "\n################################ " << lines_tested++ << " ################################\n\n";
+        std::cout << "\n################################ " << testedLines++ << " ################################\n\n";
 
         std::string token;
-        while (std::getline(line_stream, token, ';')) {
+        while (std::getline(lStream, token, ';')) {
             token.erase(0, token.find_first_not_of(' '));
             if (token[0] == 'D' && std::isdigit(token[1])) {
                 int depth;
-                std::uint64_t expected_nodes;
-                if (sscanf(token.c_str(), "D%d %lu", &depth, &expected_nodes) == 2) {
+                std::uint64_t expected;
+                if (sscanf(token.c_str(), "D%d %lu", &depth, &expected) == 2) {
                     // Test the given perft and update counters
-                    if (runTest(fen, depth, expected_nodes)) {
-                        tests_passed++;
+                    if (runTest(fen, depth, expected)) {
+                        ++passed;
                     }
-                    total_tests++;
+                    ++total;
                 }
             }
         }
@@ -132,8 +132,8 @@ void testFromFile(const std::string &filename) {
     // Show results
     std::cout << "\n\n";
     std::cout << "Perft results for " << filename << std::endl;
-    std::cout << "Total tests:      " << total_tests << std::endl;
-    std::cout << "Tests passed:     " << tests_passed << std::endl;
+    std::cout << "Total tests:      " << total << std::endl;
+    std::cout << "Tests passed:     " << passed << std::endl;
 }
 
 } // namespace Atom

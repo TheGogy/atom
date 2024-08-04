@@ -411,7 +411,6 @@ Value SearchWorker::pvSearch(
         }
 
         sPtr->moveCount = ++nMoves;
-        std::cout << "nMoves " << nMoves << std::endl;
 
         givesCheck = pos.givesCheck<Me>(currentMove);
         isCapture  = pos.getPieceAt(moveTo(currentMove)) != NO_PIECE;
@@ -497,7 +496,7 @@ Value SearchWorker::pvSearch(
         }
 
         // Undo the move
-        pos.undoMove(currentMove);
+        pos.undoMove<Me>(currentMove);
 
         assert(score > -VALUE_INFINITE && score < VALUE_INFINITE);
 
@@ -560,9 +559,6 @@ Value SearchWorker::pvSearch(
             }
         }
     }
-
-    std::cout << "end" << std::endl;
-    exit(0);
 
     assert (nMoves || sPtr->inCheck || Movegen::countLegalMoves<Me>(pos) == 0);
 

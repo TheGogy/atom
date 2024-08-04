@@ -247,26 +247,7 @@ top:
 
         case MovePickStage::MP_STAGE_QSEARCH_CAP_GOOD:
             // Return next move if it isn't in the TT
-            if (MovePicker<Me>::select<MP_TYPE_NEXT>([]() { return true; })) {
-                return (current - 1)->move;
-            }
-
-            if (depth <= QSEARCH_DEPTH_NORMAL) return MOVE_NONE;
-
-            ++mpStage;
-            [[fallthrough]];
-
-        case MovePickStage::MP_STAGE_QSEARCH_CHK_GENERATE:
-            current = movelist;
-            endMoves = Movegen::enumerateChecksToList<Me, Movegen::MG_TYPE_QUIET>(pos, current);
-
-            ++mpStage;
-            [[fallthrough]];
-
-        case MovePickStage::MP_STAGE_QSEARCH_CHK_GOOD:
-            // Return next move if it isn't in the TT
             return MovePicker<Me>::select<MP_TYPE_NEXT>([]() { return true; }).move;
-
     }
 
     // Should never reach this point.
