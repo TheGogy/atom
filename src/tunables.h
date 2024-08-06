@@ -6,8 +6,8 @@ namespace Atom {
 namespace Tunables {
 
 
-constexpr int ASPIRATION_WINDOW_SIZE    = 10;
-constexpr int ASPIRATION_WINDOW_DIVISOR = 120;
+constexpr int ASPIRATION_WINDOW_SIZE    = 5;
+constexpr int ASPIRATION_WINDOW_DIVISOR = 13424;
 
 constexpr int DELTA_INCREMENT_DIV = 3;
 
@@ -60,7 +60,6 @@ constexpr int SEE_PRUNING_CAP_SCORE = 180;
 constexpr int SEE_PRUNING_CHK_SCORE = 70;
 
 constexpr double REDUCTION_AMOUNT = 18.62;
-constexpr int REDUCTION_STAT_SCORE_NORMALISATION = 10898;
 constexpr int REDUCTION_BASE = 1274;
 constexpr int REDUCTION_DELTA_SCALE = 746;
 constexpr int REDUCTION_NORMALISER = 1024;
@@ -82,6 +81,7 @@ constexpr int NNUE_BASE_EVAL = 73921;
 constexpr int EVALUATION_NORMALIZER_SMALLNET = 68104;
 constexpr int EVALUATION_NORMALIZER_BIGNET   = 74715;
 
+constexpr int REDUCTION_HIGH_THRESHOLD = 5;
 
 } // namspace Tunables
 

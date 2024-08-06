@@ -698,12 +698,9 @@ template void Position::undoMove<BLACK, MT_EN_PASSANT>(Move m);
 template void Position::undoMove<BLACK, MT_CASTLING>(Move m);
 
 template<Color Me>
-void Position::doNullMove(BoardState& nullState, TranspositionTable& tt) {
-    std::memcpy(&nullState, state, offsetof(BoardState, accumulatorBig));
+void Position::doNullMove(TranspositionTable& tt) {
 
-    nullState.previous = state;
-    state = &nullState;
-
+    ++state;
     state->dirtyPiece.dirty_num = 0;
     state->dirtyPiece.piece[0]  = NO_PIECE;
     state->accumulatorBig.computed[WHITE] = state->accumulatorBig.computed[BLACK] =
@@ -723,8 +720,8 @@ void Position::doNullMove(BoardState& nullState, TranspositionTable& tt) {
 
 }
 
-template void Position::doNullMove<WHITE>(BoardState& newState, TranspositionTable& tt);
-template void Position::doNullMove<BLACK>(BoardState& newState, TranspositionTable& tt);
+template void Position::doNullMove<WHITE>(TranspositionTable& tt);
+template void Position::doNullMove<BLACK>(TranspositionTable& tt);
 
 template<Color Me> void Position::undoNullMove() {
     state--;

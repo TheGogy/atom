@@ -201,7 +201,9 @@ void Uci::loop() {
         token.clear();
         is >> std::skipws >> token;
 
-        if (token == "uci") {
+        if (token[0] == '#') {
+            continue;
+        } else if (token == "uci") {
             cmdUci();
         } else if (token == "isready") {
             cmdIsReady();
@@ -220,7 +222,7 @@ void Uci::loop() {
         } else if (token == "debug" || token == "d") {
             cmdDebug();
         } else if (token == "quit") {
-            break;
+            cmdQuit();
         } else if (token == "clear") {
             std::cout << "\033[2J\033[1;1H";
         } else if (token == "visualize" || token == "v") {
@@ -399,7 +401,6 @@ void Uci::cmdGo(std::istringstream& is) {
 
 
 void Uci::cmdStop() {
-    // TODO: return bestmove
     engine.stop();
 }
 
@@ -424,6 +425,8 @@ void Uci::cmdDebug() {
 
 void Uci::cmdQuit() {
     engine.stop();
+    std::cout << "All threads stopped. Exiting..." << std::endl;
+    exit(EXIT_SUCCESS);
 }
 
 

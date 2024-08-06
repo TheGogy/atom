@@ -152,7 +152,7 @@ struct StackObject {
     Move    killer;
     bool    inCheck, ttHit, ttPv;
     int     statScore;
-    int     moveCount;
+    int     nMoves;
 };
 
 
@@ -207,12 +207,12 @@ private:
 
     template<Color Me, NodeType Nt> 
     Value qSearch(
-        Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth
+        Position& pos, StackObject* sPtr, Value alpha, Value beta
     );
 
 
-    inline int getReduction(bool improving, Depth depth, int moveCount, int delta) {
-        int scale = reductions[depth] * reductions[moveCount];
+    inline int getReduction(bool improving, Depth depth, int nMoves, int delta) {
+        int scale = reductions[depth] * reductions[nMoves];
         return (
             (scale + Tunables::REDUCTION_BASE - delta * Tunables::REDUCTION_DELTA_SCALE / rootDelta) / Tunables::REDUCTION_NORMALISER
           + (!improving && scale > Tunables::REDUCTION_SCALE_THRESHOLD)

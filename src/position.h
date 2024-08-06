@@ -71,7 +71,7 @@ public:
     template <Color Me> inline void doMove(Move m);
     template <Color Me> inline void undoMove(Move m);
 
-    template <Color Me> void doNullMove(BoardState& newState, TranspositionTable& tt);
+    template <Color Me> void doNullMove(TranspositionTable& tt);
     template <Color Me> void undoNullMove();
 
     // Returns position metadata.
