@@ -56,6 +56,7 @@ void SearchWorker::onNewPv(
     info.nodesSearched = totalNodesSearched;
     info.hashFull      = tt.hashfull();
     info.tbHits        = totalTbHits;
+    info.timeSearched  = now() - limits.startTimePoint;
     info.pv            = pv;
 
     Uci::callbackInfo(info);
@@ -183,7 +184,9 @@ void SearchWorker::iterativeDeepening() {
 
         // Send update to the GUI
         // Must do this before stopping
-        if (isFirstThread() && (nodes > Tunables::UPDATE_NODES || threads.shouldStop) && !threads.abortSearch) {
+        if (isFirstThread()
+        && !(threads.abortSearch && rootMoves[0].uciScore <= VALUE_TB_LOSS_IN_MAX_PLY)
+        ) {
             onNewPv(*this, threads, tt, searchDepth);
         }
 
@@ -244,6 +247,7 @@ Value SearchWorker::pvSearch(
     assert(PvNode || (alpha == beta - 1));
     assert(0 < depth && depth < MAX_PLY);
     assert(!(PvNode && cutNode));
+    assert(0 <= sPtr->ply && sPtr->ply < MAX_PLY);
 
     // Make sure the depth does not go higher than max ply
     depth = std::min(depth, MAX_PLY - 1);
@@ -339,13 +343,15 @@ Value SearchWorker::pvSearch(
         }
 
         // Null move pruning
-        if (cutNode && (sPtr - 1)->currentMove != MOVE_NULL
+        if (   cutNode
             && eval >= beta
+            && (sPtr - 1)->currentMove != MOVE_NULL
+            && (sPtr - 1)->statScore < Tunables::NMP_VERIFICATION_MAX_STATSCORE
+            && sPtr->staticEval >= Tunables::NMP_VERIFICATION_MIN_STAT_EVAL_BASE + beta - (Tunables::NMP_VERIFICATION_MIN_STAT_EVAL_DEPTH_SCALE * depth)
+            && sPtr->ply >= nmpCutoff
             && pos.hasNonPawnMaterial<Me>()
             && beta > VALUE_TB_LOSS_IN_MAX_PLY
-            && sPtr->ply >= nmpCutoff
         ) {
-            assert(eval - beta >= 0);
 
             Depth R = getNullMoveReductionAmount(eval, beta, depth);
             sPtr->currentMove = MOVE_NULL;
@@ -360,8 +366,6 @@ Value SearchWorker::pvSearch(
                 if (nmpCutoff || depth < Tunables::NMP_VERIFICATION_MIN_DEPTH) {
                     return nullSearchScore;
                 }
-
-                assert(!nmpCutoff);  // Recursive verification is not allowed
 
                 nmpCutoff = sPtr->ply + Tunables::NMP_DEPTH_SCALE * (depth - R) / Tunables::NMP_DEPTH_DIVISOR;
 
@@ -470,6 +474,7 @@ Value SearchWorker::pvSearch(
 
         // Late move reduction
         reduction = getReduction(improving, depth, nMoves, beta - alpha);
+
         // Decrease reduction
         reduction -= PvNode;
         reduction -= pos.inCheck();
@@ -635,16 +640,15 @@ Value SearchWorker::qSearch(
     Move pv[MAX_PLY + 1];
 
     Value score, bestScore, rawEval = VALUE_NONE;
-    Move currentMove, bestMove;
+    Move currentMove, bestMove = MOVE_NONE;
     int nMoves = 0;
+
+    sPtr->inCheck = pos.inCheck();
 
     if constexpr (PvNode) {
         (sPtr + 1)->pv = pv;
         sPtr->pv[0] = MOVE_NONE;
     }
-
-    bestMove = MOVE_NONE;
-    sPtr->inCheck = pos.inCheck();
 
     if (PvNode && selDepth < (sPtr->ply + 1)) {
         selDepth = sPtr->ply + 1;
@@ -660,7 +664,7 @@ Value SearchWorker::qSearch(
 
     auto [ttHit, ttData, ttWriter] = tt.probe(pos.hash());
     sPtr->ttHit  = ttHit;
-    ttData.move  = ttHit  ? ttData.move : MOVE_NONE;
+    ttData.move  = ttHit ? ttData.move : MOVE_NONE;
     ttData.score = ttHit ? ttData.getAdjustedScore(sPtr->ply) : VALUE_NONE;
 
     // Check for TT cutoff
@@ -734,7 +738,10 @@ Value SearchWorker::qSearch(
         ++nMoves;
 
         // Do not search moves with bad SEE score
-        if (!pos.see(currentMove, Tunables::SEE_PRUNING_QSEARCH_SKIP_THRESHOLD)) {
+        if (bestScore > VALUE_TB_LOSS_IN_MAX_PLY
+         && pos.hasNonPawnMaterial<Me>()
+         && !pos.see(currentMove, 0)
+        ) {
             continue;
         }
 
@@ -775,8 +782,6 @@ Value SearchWorker::qSearch(
 
     // Check for checkmate (we are in check and the best score has not been changed)
     if (sPtr->inCheck && bestScore == -VALUE_INFINITE) {
-        std::cout << pos.printable() << std::endl;
-        std::cout << pos.getSideToMove() << std::endl;
         assert(Movegen::countLegalMoves<Me>(pos) == 0);
         return -VALUE_MATE + sPtr->ply;
     }

@@ -34,6 +34,9 @@ constexpr int NMR_DEPTH_SCALE = 3;
 constexpr int NMR_MIN_REDUCTION = 5;
 
 constexpr int NMP_VERIFICATION_MIN_DEPTH = 16;
+constexpr int NMP_VERIFICATION_MAX_STATSCORE = 14389;
+constexpr int NMP_VERIFICATION_MIN_STAT_EVAL_BASE = 390;
+constexpr int NMP_VERIFICATION_MIN_STAT_EVAL_DEPTH_SCALE = 21;
 constexpr int NMP_DEPTH_SCALE = 3;
 constexpr int NMP_DEPTH_DIVISOR = 4;
 
