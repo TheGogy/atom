@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -40,6 +41,7 @@ public:
     size_t id() const { return idx; }
 
     std::unique_ptr<Search::SearchWorker> worker;
+    std::function<void()> jobFunction;
 
     void setupWorker(
         const Position& rootPosition,

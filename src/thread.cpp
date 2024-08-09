@@ -18,9 +18,8 @@ Thread::~Thread() {
 void Thread::search() {
     std::unique_lock<std::mutex> lock(mutex);
     cv.wait(lock, [&] { return !searching; });
+    jobFunction = std::move([this]() { worker->startSearch(); });
     searching = true;
-
-    worker->startSearch();
 
     cv.notify_one();
 }
@@ -29,9 +28,8 @@ void Thread::search() {
 void Thread::clear() {
     std::unique_lock<std::mutex> lock(mutex);
     cv.wait(lock, [&] { return !searching; });
+    jobFunction = std::move([this]() { worker->clear(); });
     searching = true;
-
-    worker->clear();
 
     cv.notify_one();
 }
@@ -47,7 +45,14 @@ void Thread::idle() {
 
         if (shouldExit) return;
 
+        std::function<void()> job = std::move(jobFunction);
+        jobFunction = nullptr;
+
         lock.unlock();
+
+        if (job) {
+            job();
+        }
     }
 }
 
@@ -59,6 +64,7 @@ void Thread::waitForFinish() {
 }
 
 
+// Main go command. This will be run whenever the engine needs to start thinking
 void ThreadPool::go(
     Position& pos,
     Search::SearchLimits limits
@@ -80,7 +86,7 @@ void ThreadPool::go(
 
     // Start first thread searching, this will notify the others.
     firstThread()->search();
-
+    std::cout << "GOT TO THE BOTTOM OF THIS THING" << std::endl;
 }
 
 

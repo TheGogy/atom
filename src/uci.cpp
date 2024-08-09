@@ -425,7 +425,6 @@ void Uci::cmdDebug() {
 
 void Uci::cmdQuit() {
     engine.stop();
-    std::cout << "All threads stopped. Exiting..." << std::endl;
     exit(EXIT_SUCCESS);
 }
 
