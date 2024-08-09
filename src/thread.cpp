@@ -86,7 +86,6 @@ void ThreadPool::go(
 
     // Start first thread searching, this will notify the others.
     firstThread()->search();
-    std::cout << "GOT TO THE BOTTOM OF THIS THING" << std::endl;
 }
 
 
