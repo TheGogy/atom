@@ -5,9 +5,11 @@
 #include <chrono>
 #include <cstdint>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 #include "movegen.h"
+#include "movepicker.h"
 #include "nnue/network.h"
 #include "nnue/nnue_accumulator.h"
 #include "tt.h"
@@ -58,6 +60,7 @@ inline Depth getNullMoveReductionAmount(Value eval, int beta, Depth depth) {
 
 
 inline void updatePv(Move* pv, Move currentMove, const Move* childPv) {
+
     for (*pv++ = currentMove; childPv && *childPv != MOVE_NONE; ) {
         *pv++ = *childPv++;
     }
@@ -153,6 +156,8 @@ struct StackObject {
     bool    inCheck, ttHit, ttPv;
     int     statScore;
     int     nMoves;
+
+    Movepicker::PieceToHistory* continuationHist;
 };
 
 
@@ -177,6 +182,8 @@ public:
         Depth depth
     );
 
+    inline void clearDepth() { this->searchDepth = this->completedDepth = 0; }
+
     void startSearch();
     inline bool isFirstThread() const { return idx == 0; }
     inline RootMove getRootMove(const int i) const { return rootMoves[i]; }
@@ -187,6 +194,11 @@ public:
     Search::SearchLimits limits;
     Position rootPosition;
     RootMoveList rootMoves;
+
+    // Histories
+    Movepicker::ButterflyHistory butterflyHist;
+    Movepicker::CapturePieceToHistory captureHist;
+    Movepicker::ContinuationHistory continuationHist[2][2];
 
 private:
     friend class ThreadPool;
@@ -207,7 +219,7 @@ private:
 
     template<Color Me, NodeType Nt> 
     Value qSearch(
-        Position& pos, StackObject* sPtr, Value alpha, Value beta
+        Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth
     );
 
 
@@ -234,6 +246,102 @@ private:
 
     std::atomic<uint64_t> nodes, tbHits;
 
+    // TODO: Could move these into history struct?
+
+    inline int statBonus(Depth depth) {
+        return std::min(
+            Tunables::STAT_BONUS_DEPTH_MULTIPLIER * depth + Tunables::STAT_BONUS_DEPTH_BASE,
+            Tunables::STAT_BONUS_MAX
+        );
+    }
+
+    inline int statMalus(Depth depth) {
+        return std::min(
+            Tunables::STAT_MALUS_DEPTH_MULTIPLIER * depth + Tunables::STAT_MALUS_DEPTH_BASE,
+            Tunables::STAT_MALUS_MAX
+        );
+    }
+
+    template <Color Me>
+    inline void updateAllHistories(
+        const Position& pos,
+        StackObject* sPtr,
+        Move bestMove,
+        PartialMoveList& quietsSearched,
+        PartialMoveList& capturesSearched,
+        Depth depth
+    ) {
+
+        PieceType moved, captured;
+
+        int quietBonus = statBonus(depth);
+        int quietMalus = statMalus(depth);
+
+        if (!pos.isTactical(bestMove)) {
+            updateQuietStats<Me>(pos, sPtr, bestMove, quietBonus);
+
+            for (Move move : quietsSearched) {
+                updateQuietHistories<Me>(pos, sPtr, move, -quietMalus);
+            }
+        }
+
+        else {
+            moved    = typeOf(pos.getPieceAt(moveFrom(bestMove)));
+            captured = typeOf(pos.getPieceAt(moveTo(bestMove)));
+            captureHist[moved][moveTo(bestMove)][captured] << quietBonus;
+        }
+
+        for (Move move : capturesSearched) {
+            moved    = typeOf(pos.getPieceAt(moveFrom(move)));
+            captured = typeOf(pos.getPieceAt(moveTo(move)));
+            captureHist[moved][moveTo(move)][captured] << -quietMalus;
+        }
+    }
+
+    inline void updateContHistories(
+        StackObject* sPtr,
+        Piece pc,
+        Square to,
+        int bonus
+    ) {
+        // bonus *= Tunables::CONT_HIST_BONUS_MULTIPLIER;
+        bonus = bonus * 52 / 64;
+        for (int i : {1, 2, 3, 4, 6}) {
+            if (sPtr->inCheck && i > 2) break;
+            if (isValidMove((sPtr - i)->currentMove)) {
+                (*(sPtr - i)->continuationHist)[pc][to] << bonus / (1 + (i == 3));
+            }
+        }
+    }
+
+    inline void updateKillerHistories(
+        StackObject* sPtr,
+        Move move
+    ) {
+        sPtr->killer = move;
+    }
+
+    template <Color Me>
+    inline void updateQuietHistories(
+        const Position& pos,
+        StackObject* sPtr,
+        Move move,
+        int bonus
+    ) {
+        this->butterflyHist[Me][moveFromTo(move)] << bonus;
+        updateContHistories(sPtr, pos.getPieceAt(moveFrom(move)), moveTo(move), bonus);
+    }
+
+    template <Color Me>
+    inline void updateQuietStats(
+        const Position& pos,
+        StackObject* sPtr,
+        Move move,
+        int bonus
+    ) {
+        updateKillerHistories(sPtr, move);
+        updateQuietHistories<Me>(pos, sPtr, move, bonus);
+    }
 };
 
 

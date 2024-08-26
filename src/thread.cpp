@@ -72,6 +72,8 @@ void ThreadPool::go(
 
     firstThread()->waitForFinish();
 
+    shouldStop = abortSearch = false;
+
     Search::RootMoveList rootMoves;
 
     Movegen::enumerateLegalMoves(pos, [&](Move m) {

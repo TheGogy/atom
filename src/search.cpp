@@ -26,6 +26,16 @@ void SearchWorker::clear() {
         reductions[i] = int((Tunables::REDUCTION_AMOUNT + std::log(size_t(threads.size())) / 2) * std::log(i));
     }
 
+    // TODO: Move this to history struct
+
+    for (bool inCheck : {false, true})
+        for (Movepicker::StatsType c : {Movepicker::NoCaptures, Movepicker::Captures})
+            for (auto& to : continuationHist[inCheck][c])
+                for (auto& h : to)
+                    h->fill(-58);
+
+    butterflyHist.fill(0);
+    captureHist.fill(-700);
     cacheTable.clear(networks);
 }
 
@@ -47,6 +57,9 @@ void SearchWorker::onNewPv(
     for (const Move m : rootMoves[0].pv) {
         pv += Uci::formatMove(m) + " ";
     }
+
+    // Remove last whitespace
+    if (!pv.empty()) pv.pop_back();
 
     SearchInfo info;
 
@@ -119,12 +132,18 @@ void SearchWorker::iterativeDeepening() {
     Move bestPV[MAX_PLY + 1];
     MoveList lastBestPV;
 
-    StackObject stack[MAX_PLY + 2];
-    StackObject* sPtr = stack;
+    StackObject stack[MAX_PLY + 10] = {};
+    StackObject* sPtr = stack + 7;
 
     // Set up stack ply
     for (int i = 0; i < MAX_PLY + 2; ++i) {
         (sPtr + i)->ply = i;
+    }
+
+    // Set up continuationHist
+    for (int i = 7; i > 0; --i) {
+        (sPtr - i)->continuationHist = &this->continuationHist[0][0][NO_PIECE][0];
+        (sPtr - i)->staticEval = VALUE_NONE;
     }
 
     Depth searchUpTo;
@@ -209,6 +228,7 @@ void SearchWorker::iterativeDeepening() {
 }
 
 
+// TODO: Add CutNode to template?
 template<Color Me, NodeType nodeType>
 Value SearchWorker::pvSearch(
     Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth, bool cutNode
@@ -219,13 +239,38 @@ Value SearchWorker::pvSearch(
 
     // Quiescense search at depth 0
     if (depth <= 0) {
-        return qSearch<Me, QNodeType>(pos, sPtr, alpha, beta);
+        return qSearch<Me, QNodeType>(pos, sPtr, alpha, beta, 0);
     }
 
     // TODO: Time management should quickly check time here
 
     // Ensure depth does not exceed max ply
     depth = std::min(depth, MAX_PLY - 1);
+
+    assert(-VALUE_INFINITE <= alpha && alpha < beta && beta <= VALUE_INFINITE);
+    assert(PvNode || (alpha == beta - 1));
+    assert(0 < depth && depth < MAX_PLY);
+    assert(!(PvNode && cutNode));
+    assert(0 <= sPtr->ply && sPtr->ply < MAX_PLY);
+
+    // Make sure the depth does not go higher than max ply
+    depth = std::min(depth, MAX_PLY - 1);
+
+    SearchWorker* thisThread = this;
+
+    Move pv[MAX_PLY + 1];
+    Move currentMove, bestMove = MOVE_NONE;
+    Value bestScore = -VALUE_INFINITE;
+    Value maxScore  =  VALUE_INFINITE;
+
+    bool improving, oppWorsening;
+    Value eval, rawEval = VALUE_NONE;
+
+    PartialMoveList capturesSearched;
+    PartialMoveList quietsSearched;
+
+    sPtr->inCheck        = pos.inCheck();
+    sPtr->nMoves         = 0;
 
     if constexpr (!RootNode) {
         // See if search has been aborted
@@ -243,25 +288,6 @@ Value SearchWorker::pvSearch(
         if (alpha >= beta) return alpha;
     }
 
-    assert(-VALUE_INFINITE <= alpha && alpha < beta && beta <= VALUE_INFINITE);
-    assert(PvNode || (alpha == beta - 1));
-    assert(0 < depth && depth < MAX_PLY);
-    assert(!(PvNode && cutNode));
-    assert(0 <= sPtr->ply && sPtr->ply < MAX_PLY);
-
-    // Make sure the depth does not go higher than max ply
-    depth = std::min(depth, MAX_PLY - 1);
-
-    Move pv[MAX_PLY + 1];
-    Move currentMove, bestMove = MOVE_NONE;
-    Value bestScore = -VALUE_INFINITE;
-    Value maxScore  =  VALUE_INFINITE;
-
-    bool improving, oppWorsening;
-    Value eval, rawEval = VALUE_NONE;
-
-    sPtr->inCheck        = pos.inCheck();
-    sPtr->nMoves      = 0;
     sPtr->statScore      = 0;
     (sPtr + 1)->killer   = MOVE_NONE;
 
@@ -286,6 +312,7 @@ Value SearchWorker::pvSearch(
         ttData.bound & (ttData.score >= beta ? BOUND_LOWER : BOUND_UPPER)) {
       return ttData.score;
     }
+
 
     // TODO: Endgame tablebase probe goes here
 
@@ -326,7 +353,7 @@ Value SearchWorker::pvSearch(
         if (!PvNode && !sPtr->inCheck && depth <= Tunables::RAZORING_DEPTH &&
             eval + (Tunables::RAZORING_DEPTH_MULTIPLIER * depth) >= beta
         ) {
-            Value score = qSearch<Me, NODETYPE_NON_PV>(pos, sPtr, alpha - 1, alpha);
+            Value score = qSearch<Me, NODETYPE_NON_PV>(pos, sPtr, alpha - 1, alpha, 0);
             if (score < alpha && std::abs(score) < VALUE_TB_WIN_IN_MAX_PLY) {
                 return score;
             }
@@ -353,8 +380,11 @@ Value SearchWorker::pvSearch(
             && beta > VALUE_TB_LOSS_IN_MAX_PLY
         ) {
 
+            assert(eval - beta >= 0);
+
             Depth R = getNullMoveReductionAmount(eval, beta, depth);
             sPtr->currentMove = MOVE_NULL;
+            sPtr->continuationHist = &thisThread->continuationHist[0][0][NO_PIECE][0];
 
             pos.doNullMove<Me>(tt);
             Value nullSearchScore = -pvSearch<~Me, NODETYPE_NON_PV>(pos, sPtr + 1, -beta, -beta + 1, depth - R, false);
@@ -367,12 +397,14 @@ Value SearchWorker::pvSearch(
                     return nullSearchScore;
                 }
 
+                assert(!thisThread->nmpCutoff);
+
                 nmpCutoff = sPtr->ply + Tunables::NMP_DEPTH_SCALE * (depth - R) / Tunables::NMP_DEPTH_DIVISOR;
 
                 // Verification search
                 Value v = pvSearch<Me, NODETYPE_NON_PV>(pos, sPtr, beta - 1, beta, depth - R, false);
 
-                nmpCutoff = 0;
+                thisThread->nmpCutoff = 0;
 
                 if (v >= beta) {
                     return nullSearchScore;
@@ -387,7 +419,7 @@ Value SearchWorker::pvSearch(
 
         // Quiescense search if the depth was reduced
         if (depth <= 0) {
-            return qSearch<Me, NODETYPE_PV>(pos, sPtr, alpha, beta);
+            return qSearch<Me, NODETYPE_PV>(pos, sPtr, alpha, beta, 0);
         }
 
         // Decrease depth for cutnodes
@@ -403,16 +435,27 @@ Value SearchWorker::pvSearch(
         improving = false;
     }
 
-    Movepicker::MovePicker<Me> mp(pos, ttData.move, sPtr->killer, depth);
+    const Movepicker::PieceToHistory* tempContHist[] = {
+        (sPtr - 1)->continuationHist,
+        (sPtr - 2)->continuationHist,
+        (sPtr - 3)->continuationHist,
+        (sPtr - 4)->continuationHist,
+        nullptr,
+        (sPtr - 6)->continuationHist
+    };
+
+    Movepicker::MovePicker<Me> mp(pos, ttData.move, sPtr->killer, depth,
+                                  &thisThread->butterflyHist,
+                                  &thisThread->captureHist, tempContHist);
 
     int nMoves = 0;
-    int reduction;
     bool givesCheck, isCapture;
 
     bool skipQuiet = false;
 
-    Value score;
-    Depth newDepth;
+    Value score, delta;
+    Depth newDepth, reduction;
+    Piece movedPiece;
 
     score = bestScore;
 
@@ -434,36 +477,61 @@ Value SearchWorker::pvSearch(
             Uci::callbackIter(depth, currentMove, nMoves);
         }
 
-        givesCheck = pos.givesCheck<Me>(currentMove);
-        isCapture  = pos.getPieceAt(moveTo(currentMove)) != NO_PIECE;
-
-        newDepth = depth - 1;
-
-        if (PvNode) {
+        if constexpr (PvNode) {
             (sPtr + 1)->pv = nullptr;
         }
 
+        givesCheck = pos.givesCheck<Me>(currentMove);
+        isCapture  = pos.getPieceAt(moveTo(currentMove)) != NO_PIECE;
+        movedPiece = pos.getPieceAt(moveFrom(currentMove));
+
+        assert(movedPiece != NO_PIECE);
+
+        newDepth = depth - 1;
+
+        delta = beta - alpha;
+        reduction = getReduction(improving, depth, nMoves, delta);
+
         // Late move pruning
-        if (!RootNode && bestScore > VALUE_TB_LOSS_IN_MAX_PLY) {
+        if (!RootNode && bestScore > VALUE_TB_LOSS_IN_MAX_PLY && pos.hasNonPawnMaterial<Me>() && (isCapture || givesCheck)) {
 
             skipQuiet = (nMoves >= ((3 + depth * depth) / (2 - improving)));
 
-            // SEE pruning for checks / captures
-            if (
-                (givesCheck || isCapture)
-             && (depth <= Tunables::SEE_PRUNING_MAX_DEPTH)
-             && (!pos.see(currentMove, -depth * (isCapture ? Tunables::SEE_PRUNING_CAP_SCORE : Tunables::SEE_PRUNING_CHK_SCORE)))
+            int lmpDepth = newDepth - reduction;
+
+            Piece capturedPiece = pos.getPieceAt(moveTo(currentMove));
+            int captHist = thisThread->captureHist[movedPiece][moveTo(currentMove)][typeOf(capturedPiece)];
+
+            // Futility pruning
+            if (!givesCheck
+                && lmpDepth < Tunables::FUTULITY_PRUNING_CAPTURE_MAX_DEPTH 
+                && !sPtr->inCheck
+                && (
+                sPtr->staticEval + Tunables::FUTILITY_PRUNING_CAPTURE_BASE
+                + lmpDepth * Tunables::FUTILITY_PRUNING_CAPTURE_LMPDEPTH_SCALE
+                + PIECE_VALUE[capturedPiece]
+                + captHist / 7
+            ) <= alpha
             ) {
                 continue;
             }
-        }
 
-        if (PvNode) (sPtr + 1)->pv = nullptr;
+            // SEE pruning
+            int seeHist = std::clamp(
+                captHist / Tunables::FUTILITY_PRUNING_SEE_HISTORY_NORMALIZER,
+                depth * -Tunables::FUTILITY_PRUNING_SEE_DEPTH_SCALE_MIN,
+                depth *  Tunables::FUTILITY_PRUNING_SEE_DEPTH_SCALE_MAX
+            );
+            if (!pos.see(currentMove, Tunables::FUTILITY_PRUNING_SEE_DEPTH_SCALE_THRESHOLD * depth - seeHist)) {
+                continue;
+            }
+        }
 
         // Prefetch TT entry
         tt.prefetch(pos.hashAfter(currentMove));
 
         sPtr->currentMove = currentMove;
+        sPtr->continuationHist = &thisThread->continuationHist[sPtr->inCheck][isCapture][movedPiece][moveTo(currentMove)];
 
         // Increment nodes
         nodes.fetch_add(1, std::memory_order_relaxed);
@@ -471,22 +539,33 @@ Value SearchWorker::pvSearch(
         // Make the move
         pos.doMove<Me>(currentMove);
 
-
-        // Late move reduction
-        reduction = getReduction(improving, depth, nMoves, beta - alpha);
-
         // Decrease reduction
-        reduction -= PvNode;
-        reduction -= pos.inCheck();
-        reduction -= ttData.isPv;
-        reduction -= ttData.score > alpha;
-        reduction -= ttData.depth >= depth;
+        if (sPtr->ttPv) {
+            reduction -= (1 + (ttData.score > alpha) + (ttData.depth >= depth));
+        }
+
+        if constexpr (PvNode) {
+            --reduction;
+        }
 
         // Increase reduction
-        reduction += cutNode + cutNode;
-        reduction += pos.getPieceAt(moveTo(ttData.move)) != NO_PIECE;
+        if (cutNode) {
+            reduction += 2 - (ttData.depth >= depth && sPtr->ttPv)
+                      + (!sPtr->ttPv && currentMove != ttData.move && currentMove != sPtr->killer);
+        }
 
-        // Late move reduction
+        if (ttData.move && pos.isTactical(ttData.move)) {
+            ++reduction;
+        }
+
+        sPtr->statScore = 2 * thisThread->butterflyHist[Me][moveFromTo(currentMove)]
+                        + (*tempContHist[0])[movedPiece][moveTo(currentMove)]
+                        + (*tempContHist[1])[movedPiece][moveTo(currentMove)]
+                        - Tunables::STAT_SCORE_HISTORY_REDUCTION;
+
+        reduction -= sPtr->statScore / Tunables::REDUCTION_STAT_SCORE_NORMALIZER;
+
+        // Late moves reduction
         if (depth >= 2 && nMoves > 1 + (RootNode && depth < 10)) {
 
             Depth d = std::max(1, std::min(newDepth - reduction, newDepth + 1));
@@ -494,14 +573,21 @@ Value SearchWorker::pvSearch(
             // Narrow search with reduced depth
             score = -pvSearch<~Me, NODETYPE_NON_PV>(pos, sPtr + 1, -alpha - 1, -alpha, d, true);
 
+            // Do full depth search if LMR fails high
             if (score > alpha && d < newDepth) {
                 // Narrow search with full depth
                 score = -pvSearch<~Me, NODETYPE_NON_PV>(pos, sPtr + 1, -alpha - 1, -alpha, newDepth - 1, !cutNode);
             }
 
+            int bonus = score <= alpha ? -statMalus(newDepth)
+                      : score >= beta  ?  statBonus(newDepth)
+                                       : 0;
+
+            updateContHistories(sPtr, movedPiece, moveTo(currentMove), bonus);
+
         // If LMR is skipped, do a full depth search
         } else if (!PvNode || nMoves > 1) {
-            reduction += 2 * !ttData.move;
+            if (!ttData.move) reduction += 2;
             score = -pvSearch<~Me, NODETYPE_NON_PV>(pos, sPtr + 1, -alpha - 1, -alpha, newDepth - (reduction > Tunables::REDUCTION_HIGH_THRESHOLD), !cutNode);
         }
 
@@ -509,11 +595,6 @@ Value SearchWorker::pvSearch(
         if (PvNode && (nMoves == 1 || score > alpha)) {
             (sPtr + 1)->pv = pv;
             (sPtr + 1)->pv[0] = MOVE_NONE;
-
-            // Extend the depth opf all ttmoves
-            if (currentMove == ttData.move && sPtr->ply <= currentDepth * 2) {
-                newDepth = std::max(newDepth, 1);
-            }
 
             score = -pvSearch<~Me, NODETYPE_PV>(pos, sPtr + 1, -beta, -alpha, newDepth, false);
         }
@@ -538,11 +619,12 @@ Value SearchWorker::pvSearch(
 
             if (nMoves == 1 || score > alpha) {
                 rm.score = rm.uciScore = score;
-                rm.selDepth = selDepth;
+                rm.selDepth = thisThread->selDepth;
 
                 if (score >= beta) {
                     rm.uciScore = beta;
-                } else if (score <= alpha) {
+                }
+                else if (score <= alpha) {
                     rm.uciScore = alpha;
                 }
 
@@ -553,7 +635,15 @@ Value SearchWorker::pvSearch(
                     rm.pv.push_back(*m);
                 }
 
+                // TODO: Best move changes
+                // if (nMoves > 1) {
+                //     ++bestMoveChanges;
+                // }
+
             } else {
+                // All non-pv moves are set to -inf.
+                // This is not a problem: the move sorting is stable
+                // and so the order is preserved.
                 rm.score = -VALUE_INFINITE;
             }
         }
@@ -564,13 +654,15 @@ Value SearchWorker::pvSearch(
             if (score > alpha) {
                 bestMove = currentMove;
 
-                if (PvNode && !RootNode) {
+                if constexpr (PvNode && !RootNode) {
                     updatePv(sPtr->pv, currentMove, (sPtr + 1)->pv);
                 }
 
                 if (score >= beta) {
                     break;
-                } else {
+                }
+
+                else {
                     if (
                         (depth > Tunables::SCORE_IMPROVEMENT_DEPTH_MIN)
                      && (depth < Tunables::SCORE_IMPROVEMENT_DEPTH_MAX)
@@ -583,6 +675,13 @@ Value SearchWorker::pvSearch(
                 }
             }
         }
+
+        // if this move is not the best move, update its stats so it is not searched
+        // first in future searches
+        if (currentMove != bestMove && nMoves <= 32) {
+            if (isCapture) capturesSearched.push_back(currentMove);
+            else           quietsSearched.push_back(currentMove);
+        }
     }
 
     assert (nMoves || sPtr->inCheck || Movegen::countLegalMoves<Me>(pos) == 0);
@@ -592,7 +691,11 @@ Value SearchWorker::pvSearch(
         bestScore = sPtr->inCheck ? -VALUE_MATE + sPtr->ply : VALUE_DRAW;
     }
 
-    if (PvNode) {
+    if (bestMove != MOVE_NONE) {
+        updateAllHistories<Me>(pos, sPtr, bestMove, quietsSearched, capturesSearched, depth);
+    }
+
+    if constexpr (PvNode) {
         // Cap the best score
         bestScore = std::min(bestScore, maxScore);
     }
@@ -629,13 +732,16 @@ Value SearchWorker::pvSearch(
 // a capture.
 template<Color Me, NodeType nodeType>
 Value SearchWorker::qSearch(
-    Position& pos, StackObject* sPtr, Value alpha, Value beta
+    Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth
 ) {
     constexpr bool PvNode = nodeType == NODETYPE_PV;
 
     static_assert(nodeType != NODETYPE_ROOT);
+    assert(depth <= 0);
     assert(alpha >= -VALUE_INFINITE && alpha < beta && beta <= VALUE_INFINITE);
     assert(PvNode || (alpha == beta - 1));
+
+    SearchWorker* thisThread = this;
 
     Move pv[MAX_PLY + 1];
 
@@ -647,7 +753,7 @@ Value SearchWorker::qSearch(
 
     if constexpr (PvNode) {
         (sPtr + 1)->pv = pv;
-        sPtr->pv[0] = MOVE_NONE;
+        sPtr->pv[0]    = MOVE_NONE;
     }
 
     if (PvNode && selDepth < (sPtr->ply + 1)) {
@@ -667,10 +773,12 @@ Value SearchWorker::qSearch(
     ttData.move  = ttHit ? ttData.move : MOVE_NONE;
     ttData.score = ttHit ? ttData.getAdjustedScore(sPtr->ply) : VALUE_NONE;
 
+    Depth qsTtDepth = sPtr->inCheck || depth >= 0 ? 0 : -1;
+
     // Check for TT cutoff
     if(
         !PvNode && ttData.score != VALUE_NONE
-     && (ttData.depth >= 0)
+     && (ttData.depth >= qsTtDepth)
      && (ttData.bound & (ttData.score >= beta ? BOUND_LOWER : BOUND_UPPER))
     ) {
         return ttData.score;
@@ -729,8 +837,14 @@ Value SearchWorker::qSearch(
     }
 
 
-    Movepicker::MovePicker<Me> mp(pos, ttData.move, sPtr->killer, 0);
+    const Movepicker::PieceToHistory* tempContHist[] = {
+        (sPtr - 1)->continuationHist,
+        (sPtr - 2)->continuationHist
+    };
 
+    Movepicker::MovePicker<Me> mp(pos, ttData.move, sPtr->killer, depth,
+                                  &thisThread->butterflyHist,
+                                  &thisThread->captureHist, tempContHist);
 
     while ((currentMove = mp.nextMove()) != MOVE_NONE) {
         assert(isValidMove(currentMove));
@@ -749,13 +863,15 @@ Value SearchWorker::qSearch(
         tt.prefetch(pos.hashAfter(currentMove));
 
         sPtr->currentMove = currentMove;
+        sPtr->continuationHist = 
+            &thisThread->continuationHist[sPtr->inCheck][pos.isTactical(currentMove)][pos.getPieceAt(moveFrom(currentMove))][moveTo(currentMove)];
 
         // Increment nodes
-        nodes.fetch_add(1, std::memory_order_relaxed);
+        thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
 
         // Recursive part
         pos.doMove<Me>(currentMove);
-        score = -qSearch<~Me, nodeType>(pos, sPtr + 1, -beta, -alpha);
+        score = -qSearch<~Me, nodeType>(pos, sPtr + 1, -beta, -alpha, depth - 1);
         pos.undoMove<Me>(currentMove);
 
         assert(score > -VALUE_INFINITE && score < VALUE_INFINITE);
@@ -767,13 +883,17 @@ Value SearchWorker::qSearch(
                 bestMove = currentMove;
 
                 // Update the PV
-                if (PvNode) updatePv(sPtr->pv, currentMove, (sPtr + 1)->pv);
+                if (PvNode) {
+                    updatePv(sPtr->pv, currentMove, (sPtr + 1)->pv);
+                }
 
-                // Update alpha
                 if (score < beta) {
+                    // Update alpha
                     alpha = score;
-                } else {
-                    // Fail high here
+                }
+
+                else {
+                    // Fail high
                     break;
                 }
             }
@@ -794,8 +914,8 @@ Value SearchWorker::qSearch(
     ttWriter.write(
         pos.hash(),
         valueToTT(bestScore, sPtr->ply),
-        bestScore,
-        0,
+        rawEval,
+        qsTtDepth,
         ttHit && ttData.isPv,
         bestMove,
         tt.getAge(),

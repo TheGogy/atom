@@ -1,9 +1,8 @@
+#include <cstdlib>
+
 #include "bitboard.h"
 #include "uci.h"
 #include "zobrist.h"
-#include <cstddef>
-#include <cstdlib>
-#include <ctime>
 
 using namespace Atom;
 
@@ -12,14 +11,15 @@ using namespace Atom;
 void initEverything() {
     initBBs();
     Zobrist::init();
-    srand(time(NULL));
 }
 
 int main (int argc, char *argv[]) {
     initEverything();
 
+    std::cout << "Atom v" << ENGINE_VERSION << std::endl;
+
     Uci uci;
     uci.loop();
 
-    return 0;
+    return EXIT_SUCCESS;
 }

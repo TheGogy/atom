@@ -9,9 +9,6 @@
 namespace Atom {
 
 
-using MoveList = ValueList<Move, MAX_MOVE>;
-
-
 namespace Movegen {
 
 

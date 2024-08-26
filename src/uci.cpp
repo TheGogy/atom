@@ -455,6 +455,4 @@ void Uci::cmdTraceEval() {
 }
 
 
-
 } // namespace Atom
-

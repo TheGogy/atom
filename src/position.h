@@ -22,13 +22,14 @@ namespace Atom {
 // about the current board state used to generate, make and
 // unmake moves. Part of overall position, used in Position class.
 struct BoardState {
+    // Current board information
     CastlingRight castlingRights;
-    Square epSquare;
-    int fiftyMoveRule;
-    int halfMoves;
-    Move move;
+    Square        epSquare;
+    int           fiftyMoveRule;
+    int           halfMoves;
 
-    // Captured piece. This is used to unmake moves
+    // Previous move and captured piece, used to unmake moves
+    Move  move;
     Piece captured;
 
     // Various masks used for move generation
@@ -38,15 +39,15 @@ struct BoardState {
     Bitboard pinDiag;
     Bitboard pinOrtho;
 
-    // Hash, used for transposition
+    // Hash, used for transposition table
     uint64_t hash;
 
     // Used by NNUE
     DirtyPiece dirtyPiece;
     NNUE::Accumulator<NNUE::TransformedFeatureDimensionsBig>   accumulatorBig;
     NNUE::Accumulator<NNUE::TransformedFeatureDimensionsSmall> accumulatorSmall;
-    BoardState *previous;
 
+    BoardState *previous;
 };
 
 
@@ -157,6 +158,12 @@ public:
     template <Color Me> bool isLegalMove(const Move m) const;
     template <Color Me> bool isPseudoLegalMove(const Move m) const;
 
+    // Check other information about move
+    inline bool isCapture(const Move m) const { return getPieceAt(moveFrom(m)) != NO_PIECE; }
+    inline bool isTactical(const Move m) const {
+        assert(isValidMove(m));
+        return isCapture(m) || (moveTypeOf(m) == MT_PROMOTION && movePromotionType(m) == QUEEN);
+    }
 
     // Static exchange evaluation (SEE).
     bool see(Move move, int threshold) const;

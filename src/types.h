@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <limits>
+#include <ostream>
 #include <string>
 
 namespace Atom {
@@ -394,8 +396,9 @@ struct ScoredMove {
 
 inline bool operator<(const ScoredMove& a, const ScoredMove& b) { return a.score < b.score; }
 
+using MoveList = ValueList<Move, MAX_MOVE>;
 using ScoredMoveList = ValueList<ScoredMove, MAX_MOVE>;
-
+using PartialMoveList = ValueList<Move, 32>;
 
 // Dirty (moved) piece: Keeps track of the most recently moved piece on the board.
 // Used by NNUE.

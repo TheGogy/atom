@@ -58,13 +58,22 @@ void MovePicker<Me>::score() {
         if constexpr (MgType == Movegen::MG_TYPE_QUIET) {
             const Square from  = moveFrom(sm.move);
             const Square to    = moveTo(sm.move);
-            const PieceType pt = typeOf(pos.getPieceAt(from));
+            const Piece  pc    = pos.getPieceAt(from);
+            const PieceType pt = typeOf(pc);
+
+            // Histories
+            sm.score = (*butterflyHist)[pos.getSideToMove()][moveFromTo(sm.move)];
+            sm.score += (*continuationHist[1])[pc][to];
+            sm.score += (*continuationHist[2])[pc][to] / 3;
+            sm.score += (*continuationHist[3])[pc][to];
+            sm.score += (*continuationHist[5])[pc][to];
+            sm.score += 2 * (*continuationHist[0])[pc][to];
 
             // Killer move bonus
             sm.score =  (sm.move == killer) * Tunables::MOVEPICK_KILLER_SCORE;
 
             // Check bonus
-        sm.score += (pos.givesCheck<Me>(sm.move)) * Tunables::MOVEPICK_CHECK_SCORE;
+            sm.score += (pos.givesCheck<Me>(sm.move)) * Tunables::MOVEPICK_CHECK_SCORE;
 
             // Escape from threat bonus
             sm.score += allThreatenedPieces & from ? (
@@ -84,7 +93,9 @@ void MovePicker<Me>::score() {
 
         // Tactical moves
         else if constexpr (MgType == Movegen::MG_TYPE_TACTICAL) {
-            sm.score = Tunables::MOVEPICK_CAPTURE_MULTIPLIER * PIECE_VALUE[pos.getPieceAt(moveTo(sm.move))];
+            sm.score = Tunables::MOVEPICK_CAPTURE_MULTIPLIER 
+                     * PIECE_VALUE[pos.getPieceAt(moveTo(sm.move))]
+                     + getCaptureHist(sm.move);
         }
 
         // Evasions

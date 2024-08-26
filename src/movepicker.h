@@ -11,6 +11,62 @@ namespace Atom {
 
 namespace Movepicker {
 
+// Move history
+template<typename T, int D>
+class StatsEntry {
+
+    T entry;
+
+public:
+    void operator=(const T& v) { entry = v; }
+    T*   operator&() { return &entry; }
+    T*   operator->() { return &entry; }
+    operator const T&() const { return entry; }
+
+    void operator<<(int bonus) {
+        static_assert(D <= std::numeric_limits<T>::max(), "D overflows T");
+
+        // Make sure that bonus is in range [-D, D]
+        int clampedBonus = std::clamp(bonus, -D, D);
+        entry += clampedBonus - entry * std::abs(clampedBonus) / D;
+
+        assert(std::abs(entry) <= D);
+    }
+};
+
+template<typename T, int D, int Size, int... Sizes>
+struct Stats: public std::array<Stats<T, D, Sizes...>, Size> {
+    using stats = Stats<T, D, Size, Sizes...>;
+
+    void fill(const T& v) {
+
+        // For standard-layout 'this' points to the first struct member
+        assert(std::is_standard_layout_v<stats>);
+
+        using entry = StatsEntry<T, D>;
+        entry* p    = reinterpret_cast<entry*>(this);
+        std::fill(p, p + sizeof(*this) / sizeof(entry), v);
+    }
+};
+
+template<typename T, int D, int Size>
+struct Stats<T, D, Size>: public std::array<StatsEntry<T, D>, Size> {};
+
+constexpr int PAWN_HISTORY_SIZE        = 512;
+constexpr int CORRECTION_HISTORY_SIZE  = 16384;
+constexpr int CORRECTION_HISTORY_LIMIT = 1024;
+
+using ButterflyHistory      = Stats<int16_t, 7183, COLOR_NB, int(SQUARE_NB) * int(SQUARE_NB)>;
+using CapturePieceToHistory = Stats<int16_t, 10692, PIECE_NB, SQUARE_NB, PIECE_TYPE_NB>;
+using PieceToHistory        = Stats<int16_t, 29952, PIECE_NB, SQUARE_NB>;
+using ContinuationHistory   = Stats<PieceToHistory, 0, PIECE_NB, SQUARE_NB>;
+
+enum StatsType {
+    NoCaptures,
+    Captures
+};
+
+// TODO: History struct
 
 enum class MovePickStage : uint32_t {
     MP_STAGE_TT = 0,
@@ -76,8 +132,12 @@ public:
         const Position& pos,
         Move  ttMove,
         Move  killer,
-        Depth depth
-    ) : pos(pos), ttMove(ttMove), killer(killer), depth(depth)
+        Depth depth,
+        const ButterflyHistory* bh,
+        const CapturePieceToHistory* cph,
+        const PieceToHistory** ch
+    ) : pos(pos), ttMove(ttMove), killer(killer), depth(depth),
+        butterflyHist(bh), captureHist(cph), continuationHist(ch)
     {
         mpStage = determineStage(pos.inCheck(), ttMove, depth);
     }
@@ -98,6 +158,10 @@ private:
     ScoredMove      movelist[MAX_MOVE];
     ScoredMove      *current, *endMoves, *endBadCaptures, *beginBadQuiets, *endBadQuiets;
 
+    const ButterflyHistory* butterflyHist;
+    const CapturePieceToHistory* captureHist;
+    const PieceToHistory** continuationHist;
+
     inline MovePickStage determineStage(const bool inCheck, Move ttMove, Depth depth) const {
         if (pos.inCheck()) {
             return MovePickStage::MP_STAGE_EVASION_TT + !(ttMove && pos.isPseudoLegalMove<Me>(ttMove));
@@ -108,6 +172,10 @@ private:
 
     template<Movegen::MoveGenType MgType>
     void score();
+
+    inline int16_t getCaptureHist(const Move m) {
+        return (*captureHist)[pos.getPieceAt(moveFrom(m))][moveTo(m)][typeOf(pos.getPieceAt(moveTo(m)))];
+    }
 
     template<MovePickType MpType, typename Pred>
     ScoredMove select(Pred filter);

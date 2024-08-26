@@ -75,8 +75,10 @@ void Engine::runPerft(int depth) {
 
 // Loads the internal NNUE networks
 void Engine::loadNetworks() {
+    std::cout << "info loading networks" << std::endl;
     networks.big.load("<internal>", EvalFileDefaultNameBig);
     networks.small.load("<internal>", EvalFileDefaultNameSmall);
+    std::cout << "info loaded networks" << std::endl;
 }
 
 
