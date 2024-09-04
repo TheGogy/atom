@@ -41,6 +41,9 @@ Value evaluate(
     const NNUE::Networks& networks,
     NNUE::AccumulatorCaches& cacheTables)
 {
+    // Positions where we are in check should not be evaluated: qsearch should search deeper.
+    assert(!pos.checkers());
+
     const int pvEval = pieceValueEval<Me>(pos);
     bool smallNet = abs(pvEval) > Tunables::NNUE_SMALL_NET_THRESHOLD;
     auto [psqt, positional] = smallNet
@@ -50,9 +53,9 @@ Value evaluate(
     Value nnueEval = blendNnue(psqt, positional);
 
     // If the position is confusing for the NNUE eval or pieceValueEval
-    // (i.e. one thinks it is winning, the other thinks it is losing)
+    // (i.e. one thinks it is winning, the other thinks it is losing: they have opposite signs)
     // re-evaluate it with the big network
-    if (smallNet && ((pvEval ^ nnueEval) < 0)) {
+    if (smallNet && (pvEval * nnueEval < 0 || std::abs(nnueEval) < 227)) {
         std::tie(psqt, positional) = networks.big.evaluate(pos, &cacheTables.big);
         nnueEval = blendNnue(psqt, positional);
         smallNet = false;

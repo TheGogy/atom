@@ -182,7 +182,7 @@ public:
         Depth depth
     );
 
-    inline void clearDepth() { this->searchDepth = this->completedDepth = 0; }
+    inline void clearDepth() { this->rootDepth = this->completedDepth = 0; }
 
     void startSearch();
     inline bool isFirstThread() const { return idx == 0; }
@@ -234,7 +234,7 @@ private:
 
     size_t   idx;
 
-    Depth    currentDepth, searchDepth, completedDepth, selDepth, nmpCutoff;
+    Depth    currentDepth, rootDepth, completedDepth, selDepth, nmpCutoff;
     Value    rootDelta;
 
     std::array<int, MAX_MOVE> reductions;

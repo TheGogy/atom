@@ -119,6 +119,8 @@ void ThreadPool::clearThreads() {
         thread->clear();
         thread->waitForFinish();
     }
+
+    // TODO: Clear time manager here
 }
 
 
@@ -140,6 +142,9 @@ void ThreadPool::setNbThreads(size_t nbThreads, Search::SearchWorkerShared share
 
 
 Thread* ThreadPool::bestThread() const {
+
+    // If we only have one thread, return it
+    if (threads.size() == 1) { return firstThread(); }
 
     Thread* bestThread = firstThread();
 

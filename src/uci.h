@@ -52,7 +52,7 @@ private:
     void cmdPerft(std::istringstream& is);
     void cmdDebug();
     void cmdVisualize(std::istringstream& is);
-    void cmdTraceEval();
+    void cmdEval();
 };
 
 } // namespace Atom

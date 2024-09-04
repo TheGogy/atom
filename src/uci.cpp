@@ -227,6 +227,8 @@ void Uci::loop() {
             std::cout << "\033[2J\033[1;1H";
         } else if (token == "visualize" || token == "v") {
             cmdVisualize(is);
+        } else if (token == "eval") {
+            cmdEval();
         } else {
             std::cout << "Error: unknown command '" << token << "'" << std::endl;
         }
@@ -450,7 +452,7 @@ void Uci::cmdVisualize(std::istringstream& is) {
 }
 
 
-void Uci::cmdTraceEval() {
+void Uci::cmdEval() {
     engine.traceEval();
 }
 

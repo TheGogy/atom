@@ -46,7 +46,7 @@ enum PieceType {
     ALL_PIECES = 0,
     NO_PIECE_TYPE = 0,
     PAWN = 1, KNIGHT, BISHOP, ROOK, QUEEN, KING,
-    PIECE_TYPE_NB = 7
+    PIECE_TYPE_NB = 8
 };
 
 
@@ -346,26 +346,31 @@ public:
     }
     inline ValueList(ValueList const &vl)            = default;
     inline ValueList(ValueList&&)                    = default;
-    inline ValueList& operator=(ValueList const &ml) = default;
+    inline ValueList& operator=(ValueList const &vl) = default;
     inline ValueList& operator=(ValueList&&)         = default;
 
     // Get data from list itself
-    const Tn* begin() const { return &data_[0]; };
-    const Tn* end()   const { return data_ + size_; };
-    const Tn &operator[](int i) const { return data_[i]; }
+    inline Tn* begin()           { return &data_[0]; };
+    inline Tn* end()             { return &data_[size_]; };
+    inline Tn &operator[](int i) { return data_[i]; }
+    inline const Tn* begin()           const { return &data_[0]; };
+    inline const Tn* end()             const { return &data_[size_]; };
+    inline const Tn &operator[](int i) const { return data_[i]; }
 
-    Tn* begin() { return &data_[0]; };
-    Tn* end()   { return data_ + size_; };
-    Tn &operator[](int i) { return data_[i]; }
+    inline const Tn &front() const { return data_[0]; }
+    inline const Tn &back()  const { return data_[size_ - 1]; }
+    inline Tn &front() { return data_[0]; }
+    inline Tn &back()  { return data_[size_ - 1]; }
 
     // Get metadata about vector
-    inline bool empty()        const { return size_ == 0; }
+    inline bool empty()          const { return size_ == 0; }
     inline std::size_t size()    const { return size_; }
     inline std::size_t maxsize() const { return MaxSize; }
 
     // Functions
     inline void clear() { size_ = 0; }
     inline void push_back(const Tn& element) { data_[size_++] = element; }
+    inline void push_back(Tn&& element)      { data_[size_++] = element; }
     inline void pop_back() { size_--; }
     inline void resize(size_t newSize) { assert(newSize <= size_); size_ = newSize; }
     inline bool contains(const Tn &e) const { return std::find(begin(), end(), e) != end(); }

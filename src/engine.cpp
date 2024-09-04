@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "engine.h"
+#include "evaluate.h"
 #include "nnue.h"
 #include "nnue/network.h"
 #include "nnue/nnue_misc.h"
@@ -75,10 +76,8 @@ void Engine::runPerft(int depth) {
 
 // Loads the internal NNUE networks
 void Engine::loadNetworks() {
-    std::cout << "info loading networks" << std::endl;
     networks.big.load("<internal>", EvalFileDefaultNameBig);
     networks.small.load("<internal>", EvalFileDefaultNameSmall);
-    std::cout << "info loaded networks" << std::endl;
 }
 
 
@@ -118,7 +117,21 @@ void Engine::stop() {
 
 void Engine::traceEval() {
     verifyNetworks();
-    // TODO: Return string detailing eval from all eval sources
+
+    if (pos.inCheck()) {
+        std::cout << "Warning: in check. This position will not be evaluated in normal search." << std::endl;
+    }
+
+    std::cout << "in trace eval" << std::endl;
+    auto caches = std::make_unique<NNUE::AccumulatorCaches>(networks);
+    std::cout << "acc[0] " << caches->big.entries[0][0].accumulation[0] << std::endl;
+    std::cout << NNUE::trace(pos, networks, *caches) << std::endl;
+
+    Value v = pos.getSideToMove() == WHITE
+        ? Eval::evaluate<WHITE>(pos, networks, *caches)
+        : Eval::evaluate<BLACK>(pos, networks, *caches);
+
+    std::cout << "final evaluation: " << 0.01 * Uci::toCentipawns(v, pos) << std::endl;
 }
 
 
