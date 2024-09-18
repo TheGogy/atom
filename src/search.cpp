@@ -36,8 +36,9 @@ void SearchWorker::clear() {
 
     butterflyHist.fill(0);
     captureHist.fill(-700);
+    pawnHist.fill(-1188);
+    correctionHist.fill(0);
 
-    std::cout << "clearing in search" << std::endl;
     cacheTable.clear(networks);
 }
 
@@ -102,7 +103,8 @@ void SearchWorker::startSearch() {
     }
 
     // If the search is infinite, wait here and do nothing.
-    while (limits.isInfinite && !threads.shouldStop) {}
+    while (limits.isInfinite && !threads.shouldStop) 
+        {}
 
     // Wait for the other threads to stop
     threads.shouldStop = true;
@@ -127,7 +129,7 @@ void SearchWorker::startSearch() {
 template<Color Me>
 void SearchWorker::iterativeDeepening() {
 
-    Value bestValue = -VALUE_INFINITE;
+    Value bestScore = -VALUE_INFINITE;
     Value alpha, beta;
     Value delta, avg;
 
@@ -168,31 +170,34 @@ void SearchWorker::iterativeDeepening() {
         alpha = std::max(-VALUE_INFINITE, avg - delta);
         beta  = std::min( VALUE_INFINITE, avg + delta);
 
+        // Set optimism
+        optimism[Me]  = Tunables::OPTIMISM_RATIO_NUMERATOR * avg / (std::abs(avg) + Tunables::OPTIMISM_RATIO_DENOMINATOR);
+        optimism[~Me] = -optimism[Me];
+
         int failedHigh = 0;
         while (true) {
 
             rootDelta  = beta - alpha;
-            bestValue  = pvSearch<Me, NODETYPE_ROOT>(rootPosition, sPtr, alpha, beta, std::max(1, rootDepth - failedHigh), false);
+            bestScore  = pvSearch<Me, NODETYPE_ROOT>(rootPosition, sPtr, alpha, beta, std::max(1, rootDepth - failedHigh), false);
 
             // Sort moves such that we search the best move first (highest score -> lowest score)
             std::stable_sort(rootMoves.begin(), rootMoves.end());
 
-            if (threads.shouldStop) break;
-
-            if (isFirstThread() && (bestValue <= alpha || bestValue >= beta) && nodes > Tunables::UPDATE_NODES) {
-                onNewPv(*this, threads, tt, rootDepth);
+            // If search has been stopped externally, break immediately.
+            if (threads.shouldStop) {
+                break;
             }
 
             // fail low
-            if (bestValue <= alpha) {
+            if (bestScore <= alpha) {
                 beta = (alpha + beta) / 2;
-                alpha = std::max(-VALUE_INFINITE, bestValue - delta);
+                alpha = std::max(-VALUE_INFINITE, bestScore - delta);
                 failedHigh = 0;
             }
 
             // Fail high
-            else if (bestValue >= beta) {
-                beta = std::min(VALUE_INFINITE, bestValue + delta);
+            else if (bestScore >= beta) {
+                beta = std::min(VALUE_INFINITE, bestScore + delta);
                ++failedHigh;
             }
 
@@ -227,12 +232,13 @@ void SearchWorker::iterativeDeepening() {
 
 
 // TODO: Add CutNode to template?
-template<Color Me, NodeType nodeType>
+template<Color Me, NodeType NT>
 Value SearchWorker::pvSearch(
     Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth, bool cutNode
 ) {
-    constexpr bool PvNode   = (nodeType != NODETYPE_NON_PV);
-    constexpr bool RootNode = (nodeType == NODETYPE_ROOT);
+
+    constexpr bool PvNode   = (NT != NODETYPE_NON_PV);
+    constexpr bool RootNode = (NT == NODETYPE_ROOT);
     constexpr NodeType QNodeType = (PvNode ? NODETYPE_PV : NODETYPE_NON_PV);
 
     // Quiescense search at depth 0
@@ -279,7 +285,7 @@ Value SearchWorker::pvSearch(
         // See if search has been aborted
         if (threads.shouldStop.load(std::memory_order_relaxed) || pos.isDraw()) {
             return (sPtr->inCheck && sPtr->ply >= MAX_PLY)
-                ? Eval::evaluate<Me>(pos, networks, cacheTable)
+                ? Eval::evaluate<Me>(pos, networks, cacheTable, thisThread->optimism[Me])
                 : VALUE_DRAW - 1 + (nodes & 0x2);
         }
 
@@ -317,21 +323,21 @@ Value SearchWorker::pvSearch(
 
     if (!sPtr->inCheck) {
         if (ttHit) {
-            rawEval = (ttData.eval != VALUE_NONE ? ttData.eval : Eval::evaluate<Me>(pos, networks, cacheTable));
+            rawEval = (ttData.eval != VALUE_NONE ? ttData.eval : Eval::evaluate<Me>(pos, networks, cacheTable, thisThread->optimism[Me]));
 
             if (PvNode && ttData.eval != VALUE_NONE) {
                 NNUE::hint_common_parent_position(pos, networks, cacheTable);
             }
 
-            sPtr->staticEval = eval = clampEval(rawEval);
+            sPtr->staticEval = eval = correctStaticEval<Me>(rawEval, pos);
 
             if (ttData.score != VALUE_NONE && ttData.bound & (ttData.score > eval ? BOUND_LOWER : BOUND_UPPER)) {
                 eval = ttData.score;
             }
 
         } else {
-            rawEval = Eval::evaluate<Me>(pos, networks, cacheTable);
-            sPtr->staticEval = eval = clampEval(rawEval);
+            rawEval = Eval::evaluate<Me>(pos, networks, cacheTable, thisThread->optimism[Me]);
+            sPtr->staticEval = eval = correctStaticEval<Me>(rawEval, pos);
             ttWriter.write(pos.hash(), VALUE_NONE, rawEval, -2, sPtr->ttPv,
                          MOVE_NONE, tt.getAge(), BOUND_NONE);
         }
@@ -444,7 +450,10 @@ Value SearchWorker::pvSearch(
 
     Movepicker::MovePicker<Me> mp(pos, ttData.move, sPtr->killer, depth,
                                   &thisThread->butterflyHist,
-                                  &thisThread->captureHist, tempContHist);
+                                  &thisThread->captureHist,
+                                  tempContHist,
+                                  &thisThread->pawnHist
+                                  );
 
     int nMoves = 0;
     bool givesCheck, isCapture;
@@ -459,8 +468,6 @@ Value SearchWorker::pvSearch(
 
     // Search all the moves, stopping if beta cutoff occurs
     while ((currentMove = mp.nextMove(skipQuiet)) != MOVE_NONE) {
-
-        std::cout << "testing move " << Uci::formatMove(currentMove) << std::endl;
 
         assert(isValidMove(currentMove));
         assert(pos.isPseudoLegalMove<Me>(currentMove));
@@ -493,37 +500,57 @@ Value SearchWorker::pvSearch(
         reduction = getReduction(improving, depth, nMoves, delta);
 
         // Late move pruning
-        if (!RootNode && bestScore > VALUE_TB_LOSS_IN_MAX_PLY && pos.hasNonPawnMaterial<Me>() && (isCapture || givesCheck)) {
+        if (!RootNode && bestScore > VALUE_TB_LOSS_IN_MAX_PLY && pos.hasNonPawnMaterial<Me>()) {
 
             skipQuiet = (nMoves >= ((3 + depth * depth) / (2 - improving)));
 
             int lmpDepth = newDepth - reduction;
 
-            Piece capturedPiece = pos.getPieceAt(moveTo(currentMove));
-            int captHist = thisThread->captureHist[movedPiece][moveTo(currentMove)][typeOf(capturedPiece)];
+            if (isCapture || givesCheck) {
+                Piece capturedPiece = pos.getPieceAt(moveTo(currentMove));
+                int captHist = thisThread->captureHist[movedPiece][moveTo(currentMove)][typeOf(capturedPiece)];
 
-            // Futility pruning
-            if (!givesCheck
-                && lmpDepth < Tunables::FUTULITY_PRUNING_CAPTURE_MAX_DEPTH 
-                && !sPtr->inCheck
-                && (
-                sPtr->staticEval + Tunables::FUTILITY_PRUNING_CAPTURE_BASE
-                + lmpDepth * Tunables::FUTILITY_PRUNING_CAPTURE_LMPDEPTH_SCALE
-                + PIECE_VALUE[capturedPiece]
-                + captHist / Tunables::FUTILITY_PRUNING_CAPT_HIST_SCALE
-            ) <= alpha
-            ) {
-                continue;
+                // Futility pruning
+                if (!givesCheck
+                    && lmpDepth < Tunables::FUTULITY_PRUNING_CAPTURE_MAX_DEPTH 
+                    && !sPtr->inCheck
+                    && (
+                        sPtr->staticEval + Tunables::FUTILITY_PRUNING_CAPTURE_BASE
+                        + lmpDepth * Tunables::FUTILITY_PRUNING_CAPTURE_LMPDEPTH_SCALE
+                        + PIECE_VALUE[capturedPiece]
+                        + captHist / Tunables::FUTILITY_PRUNING_CAPT_HIST_SCALE
+                    ) <= alpha
+                ) {
+                    continue;
+                }
+
+                // SEE pruning
+                int seeHist = std::clamp(
+                    captHist / Tunables::FUTILITY_PRUNING_SEE_HISTORY_NORMALIZER,
+                    depth * -Tunables::FUTILITY_PRUNING_SEE_DEPTH_SCALE_MIN,
+                    depth *  Tunables::FUTILITY_PRUNING_SEE_DEPTH_SCALE_MAX
+                );
+                if (!pos.see(currentMove, Tunables::FUTILITY_PRUNING_SEE_DEPTH_SCALE_THRESHOLD * depth - seeHist)) {
+                    continue;
+                }
             }
 
-            // SEE pruning
-            int seeHist = std::clamp(
-                captHist / Tunables::FUTILITY_PRUNING_SEE_HISTORY_NORMALIZER,
-                depth * -Tunables::FUTILITY_PRUNING_SEE_DEPTH_SCALE_MIN,
-                depth *  Tunables::FUTILITY_PRUNING_SEE_DEPTH_SCALE_MAX
-            );
-            if (!pos.see(currentMove, Tunables::FUTILITY_PRUNING_SEE_DEPTH_SCALE_THRESHOLD * depth - seeHist)) {
-                continue;
+            else {
+                int history =
+                  (*tempContHist[0])[movedPiece][moveTo(currentMove)]
+                  + (*tempContHist[1])[movedPiece][moveTo(currentMove)]
+                  + thisThread->pawnHist[Movepicker::pawnStructureIndex(pos)][movedPiece][moveTo(currentMove)];
+
+                // Prune some moves if their history is bad
+                if (history < depth * Tunables::CONT_HIST_PRUNING_SCALE) {
+                    continue;
+                }
+
+                history += 2 * thisThread->butterflyHist[Me][moveFromTo(currentMove)];
+
+                // Increase late move pruning depth and ensure it is positive
+                lmpDepth += history / Tunables::LMP_DEPTH_HISTORY_SCALE;
+                lmpDepth = std::max(lmpDepth, 0);
             }
         }
 
@@ -589,7 +616,6 @@ Value SearchWorker::pvSearch(
         } else if (!PvNode || nMoves > 1) {
             if (!ttData.move) reduction += 2;
             score = -pvSearch<~Me, NODETYPE_NON_PV>(pos, sPtr + 1, -alpha - 1, -alpha, newDepth - (reduction > Tunables::REDUCTION_HIGH_THRESHOLD), !cutNode);
-            std::cout << "full depth search" << std::endl;
         }
 
         // Full PV search with full window (for PV nodes only)
@@ -598,7 +624,6 @@ Value SearchWorker::pvSearch(
             (sPtr + 1)->pv[0] = MOVE_NONE;
 
             score = -pvSearch<~Me, NODETYPE_PV>(pos, sPtr + 1, -beta, -alpha, newDepth, false);
-            std::cout << "full window search" << std::endl;
         }
 
         // Undo the move
@@ -621,8 +646,6 @@ Value SearchWorker::pvSearch(
 
             if (nMoves == 1 || score > alpha) {
 
-                std::cout << "new bestmove " << Uci::formatMove(currentMove) << " with score " << score << std::endl;
-
                 rm.score = rm.uciScore = score;
                 rm.selDepth = thisThread->selDepth;
 
@@ -641,9 +664,6 @@ Value SearchWorker::pvSearch(
                 }
 
                 // TODO: Best move changes
-                // if (nMoves > 1) {
-                //     ++bestMoveChanges;
-                // }
 
             } else {
                 // All non-pv moves are set to -inf.
@@ -724,6 +744,19 @@ Value SearchWorker::pvSearch(
                                  : BOUND_UPPER
     );
 
+    // Update correction history
+    if (
+        !sPtr->inCheck
+     && !(bestMove && pos.isTactical(bestMove))
+     && !(bestScore >= beta && bestScore <= sPtr->staticEval)
+     && !(!bestMove && bestScore >= sPtr->staticEval)
+    ) {
+        Value bonus = std::clamp(int(bestScore - sPtr->staticEval) * depth / 8,
+                                -Movepicker::CORRECTION_HISTORY_LIMIT / 4, Movepicker::CORRECTION_HISTORY_LIMIT / 4);
+
+        thisThread->correctionHist[Me][Movepicker::pawnStructureIndex<Movepicker::PH_CORRECTION>(pos)] << bonus;
+    }
+
     assert(bestScore > -VALUE_INFINITE && bestScore < VALUE_INFINITE);
 
     return bestScore;
@@ -735,13 +768,14 @@ Value SearchWorker::pvSearch(
 // This recursively searches moves on the search horizon, to ensure
 // that the static evaluation is not confused by tactical moves and misjudges
 // a capture.
-template<Color Me, NodeType nodeType>
+template<Color Me, NodeType NT>
 Value SearchWorker::qSearch(
     Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth
 ) {
-    constexpr bool PvNode = nodeType == NODETYPE_PV;
 
-    static_assert(nodeType != NODETYPE_ROOT);
+    constexpr bool PvNode = NT == NODETYPE_PV;
+
+    static_assert(NT != NODETYPE_ROOT);
     assert(depth <= 0);
     assert(alpha >= -VALUE_INFINITE && alpha < beta && beta <= VALUE_INFINITE);
     assert(PvNode || (alpha == beta - 1));
@@ -751,6 +785,7 @@ Value SearchWorker::qSearch(
     Move pv[MAX_PLY + 1];
 
     Value score, bestScore, rawEval = VALUE_NONE;
+    Value futilityBase;
     Move currentMove, bestMove = MOVE_NONE;
     int nMoves = 0;
 
@@ -766,11 +801,11 @@ Value SearchWorker::qSearch(
         thisThread->selDepth = sPtr->ply + 1;
     }
 
-    // Check for draw
+    // Check for draw or if we have reached MAX PLY
     if (pos.isDraw() || sPtr->ply >= MAX_PLY) {
         return (sPtr->ply >= MAX_PLY && !sPtr->inCheck)
-          ? Eval::evaluate<Me>(pos, networks, cacheTable)
-          : VALUE_DRAW;
+            ? Eval::evaluate<Me>(pos, networks, cacheTable, thisThread->optimism[Me])
+            : VALUE_DRAW;
     }
 
     assert(0 <= sPtr->ply && sPtr->ply < MAX_PLY);
@@ -782,7 +817,7 @@ Value SearchWorker::qSearch(
 
     Depth qsTtDepth = sPtr->inCheck || depth >= 0 ? 0 : -1;
 
-    // Check for TT cutoff
+    // Check for if we can cut off using the transposition table score
     if(
         !PvNode && ttData.score != VALUE_NONE
      && (ttData.depth >= qsTtDepth)
@@ -794,8 +829,8 @@ Value SearchWorker::qSearch(
     // Static eval of position
     if (!sPtr->inCheck) {
         if (sPtr->ttHit) {
-            rawEval = (ttData.eval != VALUE_NONE ? ttData.eval : Eval::evaluate<Me>(pos, networks, cacheTable));
-            sPtr->staticEval = bestScore = clampEval(rawEval);
+            rawEval = (ttData.eval != VALUE_NONE ? ttData.eval : Eval::evaluate<Me>(pos, networks, cacheTable, thisThread->optimism[Me]));
+            sPtr->staticEval = bestScore = correctStaticEval<Me>(rawEval, pos);
 
             // Use value from tt if possible
             if (std::abs(ttData.score) < VALUE_TB_WIN_IN_MAX_PLY
@@ -807,12 +842,10 @@ Value SearchWorker::qSearch(
         } else {
 
             rawEval = (sPtr - 1)->currentMove != MOVE_NULL
-                    ? Eval::evaluate<Me>(pos, networks, cacheTable)
+                    ? Eval::evaluate<Me>(pos, networks, cacheTable, thisThread->optimism[Me])
                     : -(sPtr - 1)->staticEval;
 
-            std::cout << "rawEval in qs " << rawEval << " (sptr-1)->currentMove != MOVE_NULL: " << ((sPtr - 1)->currentMove != MOVE_NULL) << std::endl;
-
-            sPtr->staticEval = bestScore = clampEval(rawEval);
+            sPtr->staticEval = bestScore = correctStaticEval<Me>(rawEval, pos);
         }
 
         // If static eval is at least beta, return immediately
@@ -837,12 +870,15 @@ Value SearchWorker::qSearch(
             return bestScore;
         }
 
+        // Update alpha
         if (bestScore > alpha) {
             alpha = bestScore;
         }
 
+        futilityBase = sPtr->staticEval + Tunables::FUTILITY_BASE_INCREMENT;
+
     } else {
-        bestScore = -VALUE_INFINITE;
+        bestScore = futilityBase = -VALUE_INFINITE;
     }
 
 
@@ -853,37 +889,91 @@ Value SearchWorker::qSearch(
 
     Movepicker::MovePicker<Me> mp(pos, ttData.move, sPtr->killer, depth,
                                   &thisThread->butterflyHist,
-                                  &thisThread->captureHist, tempContHist);
+                                  &thisThread->captureHist,
+                                  tempContHist,
+                                  &thisThread->pawnHist
+                                  );
 
-    std::cout << "a= " << alpha << " b= " << beta << std::endl;
-    exit(0);
+    Square prevSquare = (isValidMove((sPtr - 1)->currentMove)) ? (moveTo((sPtr - 1)->currentMove)) : SQ_NONE;
+
+    bool givesCheck, isTactical;
 
     while ((currentMove = mp.nextMove()) != MOVE_NONE) {
         assert(isValidMove(currentMove));
 
         ++nMoves;
 
-        // Do not search moves with bad SEE score
+        givesCheck = pos.givesCheck<Me>(currentMove);
+        isTactical = pos.isTactical(currentMove);
+
+        // Pruning
         if (bestScore > VALUE_TB_LOSS_IN_MAX_PLY
          && pos.hasNonPawnMaterial<Me>()
-         && !pos.see(currentMove, 0)
         ) {
-            continue;
+
+            if (
+                !givesCheck
+             && moveTo(currentMove) != prevSquare
+             && futilityBase > VALUE_TB_LOSS_IN_MAX_PLY
+             && moveTypeOf(currentMove) != MT_PROMOTION
+            ) {
+
+                // Move count pruning
+                if (nMoves > 2) {
+                    continue;
+                }
+
+                Value futility = futilityBase + PIECE_VALUE[pos.getPieceAt(moveTo(currentMove))];
+
+                // If static eval + value of piece we are going to capture
+                // is much lower than alpha, prune this move
+                if (futility <= alpha) {
+                    bestScore = std::max(bestScore, futility);
+                    continue;
+                }
+
+                // If static eval is worse than alpha and we don't win material, prune this move
+                if (futilityBase <= alpha && !pos.see(currentMove, 1)) {
+                    bestScore = std::max(bestScore, futilityBase);
+                    continue;
+                }
+
+                // If SEE eval is much worse than the alpha cutoff, we can prune this move
+                if (futilityBase > alpha && !pos.see(currentMove, (alpha - futilityBase) * Tunables::FUTILITY_SEE_PRUNING_MULTIPLIER)) {
+                    bestScore = alpha;
+                    continue;
+                }
+            }
+
+            // History based pruning
+            if (!isTactical && (
+                    (*tempContHist[0])[pos.getPieceAt(moveFrom(currentMove))][moveTo(currentMove)]
+                  + (*tempContHist[1])[pos.getPieceAt(moveFrom(currentMove))][moveTo(currentMove)]
+                  + thisThread->pawnHist[Movepicker::pawnStructureIndex(pos)][pos.getPieceAt(moveFrom(currentMove))][moveTo(currentMove)]
+                <= Tunables::CONT_HIST_PRUNNING_THRESHOLD
+                )
+            ) {
+                continue;
+            }
+
+            // SEE pruning
+            if (!pos.see(currentMove, -83)) {
+                continue;
+            }
         }
 
         // Prefetch probable tt entry early
         tt.prefetch(pos.hashAfter(currentMove));
 
         sPtr->currentMove = currentMove;
-        sPtr->continuationHist = 
-            &thisThread->continuationHist[sPtr->inCheck][pos.isTactical(currentMove)][pos.getPieceAt(moveFrom(currentMove))][moveTo(currentMove)];
+        sPtr->continuationHist = &thisThread->continuationHist[sPtr->inCheck][pos.isTactical(currentMove)][pos.getPieceAt(moveFrom(currentMove))][moveTo(currentMove)];
 
         // Increment nodes
         thisThread->nodes.fetch_add(1, std::memory_order_relaxed);
 
         // Recursive part
         pos.doMove<Me>(currentMove);
-        score = -qSearch<~Me, nodeType>(pos, sPtr + 1, -beta, -alpha, depth - 1);
+        score = -qSearch<~Me, NT>(pos, sPtr + 1, -beta, -alpha, depth - 1);
         pos.undoMove<Me>(currentMove);
 
         assert(score > -VALUE_INFINITE && score < VALUE_INFINITE);
@@ -895,7 +985,7 @@ Value SearchWorker::qSearch(
                 bestMove = currentMove;
 
                 // Update the PV
-                if (PvNode) {
+                if constexpr (PvNode) {
                     updatePv(sPtr->pv, currentMove, (sPtr + 1)->pv);
                 }
 
@@ -931,7 +1021,7 @@ Value SearchWorker::qSearch(
         ttHit && ttData.isPv,
         bestMove,
         tt.getAge(),
-        bestScore > beta ? BOUND_LOWER : BOUND_UPPER
+        bestScore >= beta ? BOUND_LOWER : BOUND_UPPER
     );
 
     assert(bestScore > -VALUE_INFINITE && bestScore < VALUE_INFINITE);

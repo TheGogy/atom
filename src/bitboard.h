@@ -9,15 +9,27 @@
 namespace Atom {
 
 // Bitboard utilities
-#define getBit(bitboard, square) ((bitboard) &   (1ULL << (square)))
-#define setBit(bitboard, square) ((bitboard) |=  (1ULL << (square)))
-#define popBit(bitboard, square) ((bitboard) &= ~(1ULL << (square)))
-
 #define bitloop(bb) for(; bb; bb &= bb - 1)
-#define popcount(bb) __builtin_popcountll(bb)
-#define bitscan(bb) Square(_tzcnt_u64(bb))
-#define mask(bitboard) _blsi_u64(bitboard)
-#define pext(bb, mask) _pext_u64(bb, mask)
+
+inline bool getBit(Bitboard bb, Square s) {
+    return bb & sqToBB(s);
+}
+
+inline int popcount(Bitboard bb) {
+    return __builtin_popcountll(bb);
+}
+
+inline Square bitscan(Bitboard bb) {
+    return Square(__builtin_ctzll(bb));
+}
+
+inline Bitboard lsbBitboard(Bitboard bb) {
+    return _blsi_u64(bb);
+}
+
+inline uint64_t pext(uint64_t bb, uint64_t mask) {
+    return _pext_u64(bb, mask);
+}
 
 
 void initBBs();

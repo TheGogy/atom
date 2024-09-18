@@ -37,11 +37,6 @@ namespace Search {
 
 // Some small functions to calculate values used in search
 
-inline Value clampEval(Value eval) {
-    return std::clamp(eval, VALUE_TB_LOSS_IN_MAX_PLY + 1, VALUE_TB_WIN_IN_MAX_PLY - 1);
-}
-
-
 inline Value futilityMargin(Depth depth, bool ttCut, bool improving, bool oppWorsening, int statScore) {
     Value futility     = Tunables::FUTILITY_MULT_BASE + ttCut * Tunables::FUTILITY_TTCUT_IMPACT;
     Value improvement  = improving    * futility * Tunables::FUTILITY_IMPROVEMENT_SCALE;
@@ -182,7 +177,8 @@ public:
         Depth depth
     );
 
-    inline void clearDepth() { this->rootDepth = this->completedDepth = 0; }
+    inline void reset() { this->nodes = this->tbHits = this->rootDepth = this->completedDepth = 0; }
+
 
     void startSearch();
     inline bool isFirstThread() const { return idx == 0; }
@@ -196,9 +192,11 @@ public:
     RootMoveList rootMoves;
 
     // Histories
-    Movepicker::ButterflyHistory butterflyHist;
-    Movepicker::CapturePieceToHistory captureHist;
-    Movepicker::ContinuationHistory continuationHist[2][2];
+    Movepicker::ButterflyHistory        butterflyHist;
+    Movepicker::CapturePieceToHistory   captureHist;
+    Movepicker::ContinuationHistory     continuationHist[2][2];
+    Movepicker::PawnHistory             pawnHist;
+    Movepicker::CorrectionHistory       correctionHist;
 
 private:
     friend class ThreadPool;
@@ -236,6 +234,8 @@ private:
 
     Depth    currentDepth, rootDepth, completedDepth, selDepth, nmpCutoff;
     Value    rootDelta;
+
+    Value optimism[COLOR_NB];
 
     std::array<int, MAX_MOVE> reductions;
 
@@ -330,6 +330,7 @@ private:
     ) {
         this->butterflyHist[Me][moveFromTo(move)] << bonus;
         updateContHistories(sPtr, pos.getPieceAt(moveFrom(move)), moveTo(move), bonus);
+        this->pawnHist[Movepicker::pawnStructureIndex(pos)][pos.getPieceAt(moveFrom(move))][moveTo(move)] << bonus / 2;
     }
 
     template <Color Me>
@@ -341,6 +342,17 @@ private:
     ) {
         updateKillerHistories(sPtr, move);
         updateQuietHistories<Me>(pos, sPtr, move, bonus);
+    }
+
+    template <Color Me>
+    inline Value correctStaticEval(Value eval, const Position& pos) {
+
+        // Add correction history
+        auto cv = this->correctionHist[Me][Movepicker::pawnStructureIndex(pos)];
+        eval += Tunables::CORRECTION_HIST_VAL_NUMERATOR * cv / Tunables::CORRECTION_HIST_VAL_DENOMINATOR;
+
+        // Ensure that we do not hit tablebase range
+        return std::clamp(eval, VALUE_TB_LOSS_IN_MAX_PLY + 1, VALUE_TB_WIN_IN_MAX_PLY - 1);
     }
 };
 

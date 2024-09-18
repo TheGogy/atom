@@ -40,7 +40,10 @@ struct BoardState {
     Bitboard pinOrtho;
 
     // Hash, used for transposition table
-    uint64_t hash;
+    Key hash;
+
+    // Pawn key, used for move picking
+    Key pawnKey;
 
     // Used by NNUE
     DirtyPiece dirtyPiece;
@@ -76,19 +79,19 @@ public:
     template <Color Me> void undoNullMove();
 
     // Returns position metadata.
-    inline Color getSideToMove()  const { return sideToMove; }
-    inline int getHalfMoveClock() const { return state->fiftyMoveRule; }
-    inline int getHalfMoves()     const { return state->halfMoves; }
-    inline int getFullMoves()     const { return 1 + (getHalfMoves() - (sideToMove == BLACK)) / 2; }
-    inline Square getEpSquare()   const { return state->epSquare; }
-    inline Piece getPieceAt(Square sq) const { return pieces[sq]; }
-    inline bool isEmpty(Square sq) const { return getPieceAt(sq) == NO_PIECE; }
-    inline bool isEmpty(Bitboard b) const { return !(b & getPiecesBB()); }
-    inline bool canCastle(CastlingRight cr) const  { return state->castlingRights & cr; }
+    inline Color getSideToMove()             const { return sideToMove; }
+    inline int getHalfMoveClock()            const { return state->fiftyMoveRule; }
+    inline int getHalfMoves()                const { return state->halfMoves; }
+    inline int getFullMoves()                const { return 1 + (getHalfMoves() - (sideToMove == BLACK)) / 2; }
+    inline Square getEpSquare()              const { return state->epSquare; }
+    inline Piece getPieceAt(Square sq)       const { return pieces[sq]; }
+    inline bool isEmpty(Square sq)           const { return getPieceAt(sq) == NO_PIECE; }
+    inline bool isEmpty(Bitboard b)          const { return !(b & getPiecesBB()); }
+    inline bool canCastle(CastlingRight cr)  const { return state->castlingRights & cr; }
     inline CastlingRight getCastlingRights() const { return state->castlingRights; }
 
     // Returns various bitboards.
-    inline Bitboard getPiecesBB() const          { return sideBB[WHITE] | sideBB[BLACK]; }
+    inline Bitboard getPiecesBB() const           { return sideBB[WHITE] | sideBB[BLACK]; }
     inline Bitboard getPiecesBB(Color side) const { return sideBB[side]; }
     inline Bitboard getPiecesBB(Color side, PieceType pt) const { return piecesBB[makePiece(side, pt)]; }
     inline Bitboard getPiecesBB(Color side, PieceType pt1, PieceType pt2) const {
@@ -121,22 +124,28 @@ public:
 
     // Returns the bitboards used for move generation.
     inline Bitboard checkMask()  const { return state->checkMask; }
-    inline Bitboard pinDiag()    const { return state->pinDiag; }
-    inline Bitboard pinOrtho()   const { return state->pinOrtho; }
-    inline Bitboard threatened() const { return state->attacked; }
-    inline Bitboard checkers()   const { return state->checkers; }
+    inline Bitboard pinDiag()    const { return state->pinDiag;   }
+    inline Bitboard pinOrtho()   const { return state->pinOrtho;  }
+    inline Bitboard threatened() const { return state->attacked;  }
+    inline Bitboard checkers()   const { return state->checkers;  }
     inline Bitboard nCheckers()  const { return popcount(state->checkers); }
     inline bool inCheck()        const { return !!state->checkers; }
+
+    // Check if we have non-pawn material. This is used for some pruning
     template<Color Me> inline bool hasNonPawnMaterial() { return getPiecesBB(Me, PAWN, KING) != getPiecesBB(Me); }
 
     // Compute / get the hash of the current position.
-    TTKey computeHash() const;
-    inline TTKey hash() const { return state->hash; }
-    inline TTKey hashAfter(const Move m) const;
-    inline TTKey hashAfterNull() const { return hash() ^ Zobrist::sideToMoveKey; }
+    Key computeHash() const;
+    inline Key hash() const { return state->hash; }
+    inline Key hashAfter(const Move m) const;
+    inline Key hashAfterNull() const { return hash() ^ Zobrist::sideToMoveKey; }
 
     // Get the size of the current position history.
     inline size_t historySize() const { return state - history; }
+
+    // Compute / get the pawn key of the current position (used for move picker).
+    Key computePawnKey() const;
+    inline Key pawnKey() const { return state->pawnKey; }
 
     // Check for various draws.
     inline bool isRepetitionDraw()  const;
@@ -145,7 +154,7 @@ public:
     inline bool isDraw()            const { return isMaterialDraw() || isFiftyMoveDraw() || isRepetitionDraw(); }
 
     // Get the previous move.
-    inline Move previousMove()    const { return state->move; }
+    inline Move previousMove() const { return state->move; }
 
     // Get the current board state (used for NNUE)
     inline BoardState* getState() const { return state; }
@@ -158,8 +167,15 @@ public:
     template <Color Me> bool isLegalMove(const Move m) const;
     template <Color Me> bool isPseudoLegalMove(const Move m) const;
 
-    // Check other information about move
-    inline bool isCapture(const Move m) const { return getPieceAt(moveFrom(m)) != NO_PIECE; }
+    // Check if a move is a capture
+    inline bool isCapture(const Move m) const {
+        assert(isValidMove(m));
+
+        // All captures have a piece on the "to" square except en passant
+        return getPieceAt(moveTo(m)) != NO_PIECE || moveTypeOf(m) == MT_EN_PASSANT;
+    }
+
+    // Tactical moves are either captures, or queen promotions.
     inline bool isTactical(const Move m) const {
         assert(isValidMove(m));
         return isCapture(m) || (moveTypeOf(m) == MT_PROMOTION && movePromotionType(m) == QUEEN);
@@ -169,8 +185,8 @@ public:
     bool see(Move move, int threshold) const;
 
     // Check to see if a piece can see another piece
-    inline bool pieceSees(const Square seer, const Square victim, const Bitboard occ) const {
-        switch (typeOf(getPieceAt(seer))) {
+    inline bool pieceSees(const PieceType pt, const Square seer, const Bitboard victim, const Bitboard occ) const {
+        switch (pt) {
             case PAWN:
                 return (sideToMove == WHITE ? pawnAttacks<WHITE>(seer) : pawnAttacks<BLACK>(seer)) & victim;
             case KNIGHT:
@@ -184,6 +200,8 @@ public:
             case KING:
                 return attacks<KING>(seer) & victim;
             default:
+                // Should never reach this point
+                assert(false);
                 return false;
         }
     }
@@ -227,10 +245,18 @@ private:
 // 2. There must not exist at least one bishop on each square color for either side.
 // 3. There must not exist at least three knights on the board for either side.
 inline bool Position::isMaterialDraw() const {
-    if ((getPiecesBB(PAWN) | getPiecesBB(ROOK) | getPiecesBB(QUEEN)) ||
-       (((getPiecesBB(WHITE, BISHOP) & LIGHT_SQUARES) && (getPiecesBB(WHITE, BISHOP) & DARK_SQUARES))  ||
-        ((getPiecesBB(BLACK, BISHOP) & LIGHT_SQUARES) && (getPiecesBB(BLACK, BISHOP) & DARK_SQUARES))) ||
-       ((popcount(getPiecesBB(WHITE, KNIGHT)) < 3) || popcount(getPiecesBB(BLACK, KNIGHT)) < 3)) {
+
+    if (
+        // No pawns / rooks / queens
+        (getPiecesBB(PAWN) | getPiecesBB(ROOK) | getPiecesBB(QUEEN)) ||
+
+        // No bishop pairs
+        (((getPiecesBB(WHITE, BISHOP) & LIGHT_SQUARES) && (getPiecesBB(WHITE, BISHOP) & DARK_SQUARES))  ||
+         ((getPiecesBB(BLACK, BISHOP) & LIGHT_SQUARES) && (getPiecesBB(BLACK, BISHOP) & DARK_SQUARES))) ||
+
+        // Less than 3 knights for either side
+        ((popcount(getPiecesBB(WHITE, KNIGHT)) < 3) || popcount(getPiecesBB(BLACK, KNIGHT)) < 3))
+    {
         return false;
     }
     return true;
@@ -311,12 +337,12 @@ inline void Position::unsetPiece(Square sq) {
 
 
 // Computes what the hash would be if a move is played
-inline TTKey Position::hashAfter(const Move m) const {
+inline Key Position::hashAfter(const Move m) const {
     const Square from = moveFrom(m);
     const Square to   = moveTo(m);
     const Piece p     = getPieceAt(from);
     const Piece cap   = getPieceAt(to);
-    TTKey h           = hash();
+    Key h           = hash();
 
     h ^= Zobrist::sideToMoveKey;
     h ^= Zobrist::keys[p][from] ^ Zobrist::keys[p][to];

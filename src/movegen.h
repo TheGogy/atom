@@ -221,25 +221,25 @@ inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const
     }
 
     // Normal Capture
-    if constexpr (MgType & MG_TYPE_QUIET || MgType == MG_TYPE_EVASIONS) {
+    if constexpr (MgType & (MG_TYPE_TACTICAL | MG_TYPE_EVASIONS)) {
 
         // Orthogonally pinned pawns cannot take, as that would be a diagonal move.
         Bitboard pawns = source & ~Rank7 & ~pinOrtho;
-        Bitboard capL = (shift<UpLeft>(pawns & ~pinDiag)  | (shift<UpLeft>(pawns & pinDiag) & pinDiag)) & pos.getPiecesBB(Opp);
-        Bitboard capR = (shift<UpRight>(pawns & ~pinDiag) | (shift<UpRight>(pawns & pinDiag) & pinDiag)) & pos.getPiecesBB(Opp);
+        Bitboard capLeft  = (shift<UpLeft>(pawns & ~pinDiag)  | (shift<UpLeft>(pawns & pinDiag) & pinDiag)) & pos.getPiecesBB(Opp);
+        Bitboard capRight = (shift<UpRight>(pawns & ~pinDiag) | (shift<UpRight>(pawns & pinDiag) & pinDiag)) & pos.getPiecesBB(Opp);
 
         if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) {
-            capL &= checkMask;
-            capR &= checkMask;
+            capLeft &= checkMask;
+            capRight &= checkMask;
         }
 
-        bitloop(capL) {
-            Square to = bitscan(capL);
+        bitloop(capLeft) {
+            Square to = bitscan(capLeft);
             Square from = to - UpLeft;
             HANDLE_MOVE(makeMove(from, to));
         }
-        bitloop(capR) {
-            Square to = bitscan(capR);
+        bitloop(capRight) {
+            Square to = bitscan(capRight);
             Square from = to - UpRight;
             HANDLE_MOVE(makeMove(from, to));
         }

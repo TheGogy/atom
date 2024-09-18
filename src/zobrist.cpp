@@ -1,22 +1,23 @@
 
-#include <cstdint>
 #include "zobrist.h"
+#include "tt.h"
 #include "types.h"
 
 namespace Atom {
 
 namespace Zobrist {
 
-Bitboard keys[PIECE_NB][SQUARE_NB];
-Bitboard enpassantKeys[FILE_NB+1];
-Bitboard castlingKeys[CASTLING_RIGHT_NB];
-Bitboard sideToMoveKey;
+Key keys[PIECE_NB][SQUARE_NB];
+Key enpassantKeys[FILE_NB+1];
+Key castlingKeys[CASTLING_RIGHT_NB];
+Key sideToMoveKey;
+Key noPawnsKey;
 
-Bitboard rand_u64() {
+Key rand_u64() {
     // TODO: see if there is a better seed: this was chosen at random
-    static uint64_t seed = 0x4E4B705B92903BA4ull;
+    static Key seed = 0x4E4B705B92903BA4ull;
 
-    uint64_t val = (seed += 0x9E3779B97F4A7C15ull);
+    Key val = (seed += 0x9E3779B97F4A7C15ull);
     val = (val ^ (val >> 30)) * 0xBF58476D1CE4E5B9ull;
     val = (val ^ (val >> 27)) * 0x94D049BB133111EBull;
     return val ^ (val >> 31);
@@ -39,6 +40,7 @@ void init() {
     enpassantKeys[FILE_NB] = 0;
 
     sideToMoveKey = rand_u64();
+    noPawnsKey    = rand_u64();
 }
 
 } // namespace Zobrist

@@ -252,9 +252,9 @@ constexpr Bitboard CastlingKingPath[CASTLING_RIGHT_NB] = {
 
 enum Bound {
     BOUND_NONE,
-    BOUND_LOWER,
     BOUND_UPPER,
-    BOUND_EXACT = BOUND_LOWER | BOUND_LOWER
+    BOUND_LOWER,
+    BOUND_EXACT = BOUND_UPPER | BOUND_LOWER
 };
 
 
@@ -303,10 +303,11 @@ constexpr Move makeMove(Square from, Square to, PieceType promotionPiece = KNIGH
 
 
 // Get move information
+// TODO: Move these into move struct itself?
 constexpr Square moveTo(Move m)       { return Square(m & 0x3F); }
 constexpr Square moveFrom(Move m)     { return Square((m >> 6) & 0x3F); }
 constexpr uint16_t moveFromTo(Move m) { return m & 0xFFF; }
-constexpr MoveType moveTypeOf(Move m)   { return MoveType(m & (3 << 14)); }
+constexpr MoveType moveTypeOf(Move m) { return MoveType(m & (3 << 14)); }
 constexpr PieceType movePromotionType(Move m) { return PieceType(((m >> 12) & 3) + KNIGHT); }
 
 
@@ -333,7 +334,7 @@ inline Bitboard& operator|= (Bitboard& b, Square s) { return b |= sqToBB(s); }
 inline Bitboard& operator^= (Bitboard& b, Square s) { return b ^= sqToBB(s); }
 inline Bitboard  operator|  (Square s1, Square s2)  { return sqToBB(s1) | sqToBB(s2); }
 
-//
+
 // Resizeable vector. Used for move list.
 template <typename Tn, std::size_t MaxSize>
 class ValueList {

@@ -78,6 +78,7 @@ void Engine::runPerft(int depth) {
 void Engine::loadNetworks() {
     networks.big.load("<internal>", EvalFileDefaultNameBig);
     networks.small.load("<internal>", EvalFileDefaultNameSmall);
+    verifyNetworks();
 }
 
 
@@ -93,10 +94,12 @@ void Engine::verifyNetworks() {
 void Engine::loadBigNetFromFile(const std::string& path) {
     size_t n = path.find_last_of("/\\");
     networks.big.load(path.substr(0, n), path.substr(n + 1));
+    networks.big.verify(EvalFileDefaultNameBig);
 }
 void Engine::loadSmallNetFromFile(const std::string& path) {
     size_t n = path.find_last_of("/\\");
     networks.small.load(path.substr(0, n), path.substr(n + 1));
+    networks.small.verify(EvalFileDefaultNameSmall);
 }
 
 //
@@ -105,7 +108,6 @@ void Engine::loadSmallNetFromFile(const std::string& path) {
 //
 
 void Engine::go(Search::SearchLimits limits) {
-    verifyNetworks();
     threads.go(pos, limits);
 }
 
@@ -122,14 +124,12 @@ void Engine::traceEval() {
         std::cout << "Warning: in check. This position will not be evaluated in normal search." << std::endl;
     }
 
-    std::cout << "in trace eval" << std::endl;
     auto caches = std::make_unique<NNUE::AccumulatorCaches>(networks);
-    std::cout << "acc[0] " << caches->big.entries[0][0].accumulation[0] << std::endl;
     std::cout << NNUE::trace(pos, networks, *caches) << std::endl;
 
     Value v = pos.getSideToMove() == WHITE
-        ? Eval::evaluate<WHITE>(pos, networks, *caches)
-        : Eval::evaluate<BLACK>(pos, networks, *caches);
+        ? Eval::evaluate<WHITE>(pos, networks, *caches, 0)
+        : Eval::evaluate<BLACK>(pos, networks, *caches, 0);
 
     std::cout << "final evaluation: " << 0.01 * Uci::toCentipawns(v, pos) << std::endl;
 }

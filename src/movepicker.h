@@ -52,14 +52,28 @@ struct Stats: public std::array<Stats<T, D, Sizes...>, Size> {
 template<typename T, int D, int Size>
 struct Stats<T, D, Size>: public std::array<StatsEntry<T, D>, Size> {};
 
+
+// Pawn and correction history.
 constexpr int PAWN_HISTORY_SIZE        = 512;
 constexpr int CORRECTION_HISTORY_SIZE  = 16384;
 constexpr int CORRECTION_HISTORY_LIMIT = 1024;
+
+enum PawnHistoryType {
+    PH_NORMAL,
+    PH_CORRECTION
+};
+
+template<PawnHistoryType T = PH_NORMAL>
+inline int pawnStructureIndex(const Position& pos) {
+    return pos.pawnKey() & ((T == PH_NORMAL ? PAWN_HISTORY_SIZE : CORRECTION_HISTORY_SIZE) - 1);
+}
 
 using ButterflyHistory      = Stats<int16_t, 7183, COLOR_NB, int(SQUARE_NB) * int(SQUARE_NB)>;
 using CapturePieceToHistory = Stats<int16_t, 10692, PIECE_NB, SQUARE_NB, PIECE_TYPE_NB>;
 using PieceToHistory        = Stats<int16_t, 29952, PIECE_NB, SQUARE_NB>;
 using ContinuationHistory   = Stats<PieceToHistory, 0, PIECE_NB, SQUARE_NB>;
+using PawnHistory           = Stats<int16_t, 8192, PAWN_HISTORY_SIZE, PIECE_NB, SQUARE_NB>;
+using CorrectionHistory     = Stats<int16_t, CORRECTION_HISTORY_LIMIT, COLOR_NB, CORRECTION_HISTORY_SIZE>;
 
 enum StatsType {
     NoCaptures,
@@ -135,9 +149,11 @@ public:
         Depth depth,
         const ButterflyHistory* bh,
         const CapturePieceToHistory* cph,
-        const PieceToHistory** ch
-    ) : pos(pos), ttMove(ttMove), killer(killer), depth(depth),
-        butterflyHist(bh), captureHist(cph), continuationHist(ch)
+        const PieceToHistory** ch,
+        const PawnHistory* ph
+    ) :
+        pos(pos), ttMove(ttMove), killer(killer), depth(depth),
+        butterflyHist(bh), captureHist(cph), continuationHist(ch), pawnHist(ph)
     {
         mpStage = determineStage(pos.inCheck(), ttMove, depth);
     }
@@ -158,9 +174,11 @@ private:
     ScoredMove      movelist[MAX_MOVE];
     ScoredMove      *current, *endMoves, *endBadCaptures, *beginBadQuiets, *endBadQuiets;
 
-    const ButterflyHistory* butterflyHist;
+    // Histories
+    const ButterflyHistory*      butterflyHist;
     const CapturePieceToHistory* captureHist;
-    const PieceToHistory** continuationHist;
+    const PieceToHistory**       continuationHist;
+    const PawnHistory*           pawnHist;
 
     inline MovePickStage determineStage(const bool inCheck, Move ttMove, Depth depth) const {
         if (pos.inCheck()) {

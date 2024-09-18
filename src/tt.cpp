@@ -13,11 +13,12 @@ namespace Atom {
 // Updates a TTEntry with new data.
 // This can be racy.
 void TTEntry::save(
-    TTKey key, Value score, Value eval,
+    Key key, Value score, Value eval,
     Depth depth, bool isPv, Move move,
     uint8_t age, Bound bound
 ) {
 
+    // Check to see if we actually have a new TT move
     if (move != MOVE_NONE || !hashEquals(key)) {
         move16 = move;
     }
@@ -41,7 +42,7 @@ void TTEntry::save(
 TTWriter::TTWriter(TTEntry* entry) : entry(entry) {}
 
 void TTWriter::write(
-    TTKey key, Value score, Value eval,
+    Key key, Value score, Value eval,
     Depth depth, bool isPv, Move move,
     uint8_t age, Bound bound
 ) {
@@ -49,7 +50,7 @@ void TTWriter::write(
 }
 
 
-std::tuple<bool, TTData, TTWriter> TranspositionTable::probe(const TTKey key) const {
+std::tuple<bool, TTData, TTWriter> TranspositionTable::probe(const Key key) const {
     TTEntry* const entry = lookup(key);
     const uint16_t key16 = uint16_t(key);
 

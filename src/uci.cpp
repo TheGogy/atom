@@ -165,7 +165,7 @@ void Uci::callbackInfo(const Search::SearchInfo info) {
        << " seldepth " << info.selDepth
        << " score "    << info.score
        << " nodes "    << info.nodesSearched
-       << " nps "      << (info.nodesSearched * 1000) / info.timeSearched
+       << " nps "      << (info.nodesSearched * 1000) / (info.timeSearched + 1)
        << " hashfull " << info.hashFull
        << " tbhits "   << info.tbHits
        << " time "     << info.timeSearched

@@ -51,7 +51,7 @@ public:
         worker->rootPosition = rootPosition;
         worker->rootMoves    = rootMoves;
         worker->limits       = limits;
-        worker->clearDepth();
+        worker->reset();
     }
 
 private:

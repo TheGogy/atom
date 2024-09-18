@@ -166,14 +166,17 @@ inline void Position::updateCheckers() {
 
 
 // Computes the hash for the current position
-Bitboard Position::computeHash() const {
-    Bitboard hash = 0;
+Key Position::computeHash() const {
+    Key hash = 0;
 
-    for (Square sq = SQ_ZERO; sq < SQUARE_NB; ++sq) {
-        Piece p = getPieceAt(sq);
-        if (p == NO_PIECE) continue;
+    Piece p;
+    Square s;
+    Bitboard pieces = getPiecesBB();
 
-        hash ^= Zobrist::keys[p][sq];
+    bitloop(pieces) {
+        s = bitscan(pieces);
+        p = getPieceAt(s);
+        hash ^= Zobrist::keys[p][s];
     }
 
     hash ^= Zobrist::castlingKeys[getCastlingRights()];
@@ -181,6 +184,25 @@ Bitboard Position::computeHash() const {
     if (getSideToMove() == BLACK) hash ^= Zobrist::sideToMoveKey;
 
     return hash;
+}
+
+
+// Computes the pawn key for the position. This is used for
+// move picking.
+Key Position::computePawnKey() const {
+    Key pawnKey = Zobrist::noPawnsKey;
+
+    Piece p;
+    Square s;
+    Bitboard allPawns = getPiecesBB(PAWN);
+
+    bitloop(allPawns) {
+        s = bitscan(allPawns);
+        p = getPieceAt(s);
+        pawnKey ^= Zobrist::keys[p][s];
+    }
+
+    return pawnKey;
 }
 
 
@@ -200,9 +222,9 @@ inline Bitboard Position::getAttackersTo(const Square s, const Bitboard occ) con
     return (pawnAttacks<BLACK>(s) & getPiecesBB(WHITE, PAWN))
          | (pawnAttacks<WHITE>(s) & getPiecesBB(BLACK, PAWN))
          | (attacks<KNIGHT>(s) & getPiecesBB(KNIGHT))
-         | (attacks<ROOK>(s)   & getPiecesBB(ROOK, QUEEN))
-         | (attacks<BISHOP>(s) & getPiecesBB(BISHOP, QUEEN))
-         | (attacks<KING>(s)   & getPiecesBB(KING));
+         | (attacks<ROOK>(s, occ) & getPiecesBB(ROOK, QUEEN))
+         | (attacks<BISHOP>(s, occ) & getPiecesBB(BISHOP, QUEEN))
+         | (attacks<KING>(s) & getPiecesBB(KING));
 }
 
 
@@ -512,17 +534,24 @@ void Position::doMove(Move m) {
             dp.piece[1]  = captured;
             dp.from[1]   = to;
             dp.to[1]     = SQ_NONE;
+
+            if (typeOf(captured) == PAWN) {
+                state->pawnKey ^= Zobrist::keys[captured][to];
+            }
         }
 
+        // Update hashes
         hash ^= Zobrist::keys[p][from] ^ Zobrist::keys[p][to];
-        movePiece<Me>(from, to);
 
         hash ^= Zobrist::castlingKeys[state->castlingRights];
         state->castlingRights &= ~(CastlingRightsMask[from] | CastlingRightsMask[to]);
         hash ^= Zobrist::castlingKeys[state->castlingRights];
 
+
+        movePiece<Me>(from, to);
+
         // Special handling for pawn moves
-        if (p == makePiece(Me, PAWN)) {
+        if (typeOf(p) == PAWN) {
             state->fiftyMoveRule = 0;
 
             if ((int(from) ^ int(to)) == int(NORTH + NORTH)) {
@@ -533,6 +562,9 @@ void Position::doMove(Move m) {
                     state->epSquare = epsq;
                 }
             }
+
+            // Update pawn key
+            state->pawnKey ^= Zobrist::keys[p][from] ^ Zobrist::keys[p][to];
         }
 
     } else if constexpr (Mt == MT_CASTLING) {
@@ -599,19 +631,26 @@ void Position::doMove(Move m) {
 
         hash ^= Zobrist::keys[makePiece(Me, PAWN)][from] ^ Zobrist::keys[piecePromotedTo][to];
 
+        // Update bitboards
         unsetPiece<Me>(from);
         setPiece<Me>(to, piecePromotedTo);
 
+        // Reset fifty move rule
         state->fiftyMoveRule = 0;
 
+        // Update castling rights
         hash ^= Zobrist::castlingKeys[state->castlingRights];
         state->castlingRights &= ~(CastlingRightsMask[from] | CastlingRightsMask[to]);
         hash ^= Zobrist::castlingKeys[state->castlingRights];
+
+        // Update pawn key
+        state->pawnKey ^= Zobrist::keys[p][from];
 
     } else if constexpr (Mt == MT_EN_PASSANT) {
         // Handle en passant captures
         const Square epsq = to - pawnDirection(Me);
 
+        // NNUE
         dp.dirty_num = 2;
 
         dp.piece[0]  = makePiece(Me, PAWN);
@@ -622,13 +661,19 @@ void Position::doMove(Move m) {
         dp.from[1]   = epsq;
         dp.to[1]     = SQ_NONE;
 
+        // Update hash
         hash ^= Zobrist::keys[makePiece(~Me, PAWN)][epsq];
         hash ^= Zobrist::keys[makePiece(Me, PAWN)][from] ^ Zobrist::keys[makePiece(Me, PAWN)][to];
 
+        // Update bitboards
         unsetPiece<~Me>(epsq);
         movePiece<Me>(from, to);
 
+        // Update fifty move rule
         state->fiftyMoveRule = 0;
+
+        // Update pawn key
+        state->pawnKey ^= Zobrist::keys[makePiece(~Me, PAWN)][epsq] ^ Zobrist::keys[p][from];
     }
 
     // Update hash for the side to move
@@ -657,6 +702,8 @@ void Position::undoMove(Move m) {
     const Square to = moveTo(m);
     const Piece capture = state->captured;
 
+    assert(getPieceAt(from) == NO_PIECE || moveTypeOf(m) == MT_CASTLING);
+
     state--;
     sideToMove = Me;
 
@@ -666,25 +713,32 @@ void Position::undoMove(Move m) {
         if (capture != NO_PIECE) {
             setPiece<~Me>(to, capture);
         }
-    } else if constexpr (Mt == MT_CASTLING) {
+    }
+
+    else if constexpr (Mt == MT_CASTLING) {
         const CastlingRight cr = Me & (to > from ? KING_SIDE : QUEEN_SIDE);
         const Square rookFrom = CastlingRookFrom[cr];
         const Square rookTo = CastlingRookTo[cr];
 
         movePiece<Me>(to, from);
         movePiece<Me>(rookTo, rookFrom);
-    } else if constexpr (Mt == MT_PROMOTION){
+    }
+
+    else if constexpr (Mt == MT_PROMOTION){
         unsetPiece<Me>(to);
         setPiece<Me>(from, makePiece(Me, PAWN));
 
         if (capture != NO_PIECE) {
             setPiece<~Me>(to, capture);
         }
-    } else if constexpr (Mt == MT_EN_PASSANT) {
+    }
+
+    else if constexpr (Mt == MT_EN_PASSANT) {
         movePiece<Me>(to, from);
 
         const Square epsq = to - pawnDirection(Me);
         setPiece<~Me>(epsq, makePiece(~Me, PAWN));
+
     }
 }
 
@@ -700,19 +754,30 @@ template void Position::undoMove<BLACK, MT_CASTLING>(Move m);
 template<Color Me>
 void Position::doNullMove(TranspositionTable& tt) {
 
+    assert(!checkers());
+
     ++state;
+
+    // Handle NNUE
     state->dirtyPiece.dirty_num = 0;
     state->dirtyPiece.piece[0]  = NO_PIECE;
     state->accumulatorBig.computed[WHITE] = state->accumulatorBig.computed[BLACK] =
         state->accumulatorSmall.computed[WHITE] = state->accumulatorSmall.computed[BLACK] = false;
 
-    state->hash ^= Zobrist::enpassantKeys[fileOf(state->epSquare) + FILE_NB * (state->epSquare == SQ_NONE)];
+    // Increment fifty move rule
+    ++state->fiftyMoveRule;
+
+    // Reset EP square
     state->epSquare = SQ_NONE;
 
+    // Handle hash
+    state->hash ^= Zobrist::enpassantKeys[fileOf(state->epSquare) + FILE_NB * (state->epSquare == SQ_NONE)];
     state->hash ^= Zobrist::sideToMoveKey;
-    ++state->fiftyMoveRule;
+
+    // Prefetch entry here to save time
     tt.prefetch(hash());
 
+    // Update other bitboards and state info
     sideToMove = ~Me;
     updateThreatened<~Me>();
     state->checkers = EMPTY;
@@ -723,6 +788,8 @@ void Position::doNullMove(TranspositionTable& tt) {
 template void Position::doNullMove<WHITE>(TranspositionTable& tt);
 template void Position::doNullMove<BLACK>(TranspositionTable& tt);
 
+
+// Undo a null move from the position
 template<Color Me> void Position::undoNullMove() {
     state--;
     sideToMove = Me;
@@ -731,6 +798,7 @@ template<Color Me> void Position::undoNullMove() {
 template void Position::undoNullMove<WHITE>();
 template void Position::undoNullMove<BLACK>();
 
+// Find if a given move is legal
 template<Color Me>
 bool Position::isLegalMove(Move m) const {
     assert(isValidMove(m));
@@ -861,6 +929,8 @@ bool Position::see(Move move, int threshold) const {
     assert(isValidMove(move));
 
     if (moveTypeOf(move) != MT_NORMAL) {
+        // Handle enpassants, castling and promotions
+        // separately: these moves do not require an exchange
         return VALUE_ZERO >= threshold;
     }
 
@@ -868,12 +938,18 @@ bool Position::see(Move move, int threshold) const {
     const Square to   = moveTo(move);
 
     Value swap  = PIECE_VALUE[getPieceAt(to)] - threshold;
-    if (swap < 0) return false;
+    if (swap < 0) {
+        return false;
+    }
 
     swap = PIECE_VALUE[getPieceAt(from)] - swap;
-    if (swap <= 0) return false;
+    if (swap <= 0) {
+        return true;
+    }
 
-    Color stm           = sideToMove;
+    assert(colorOf(getPieceAt(from)) == getSideToMove());
+
+    Color stm           = getSideToMove();
     Bitboard occ        = getPiecesBB() ^ from ^ to;
     Bitboard attackers  = getAttackersTo(to, occ);
     Bitboard stmAttackers, bb;
@@ -888,16 +964,7 @@ bool Position::see(Move move, int threshold) const {
             break;
         }
 
-        // Remove pinned pieces
-        if (pinDiag() & occ) {
-            stmAttackers &= ~pinDiag();
-        }
-        if (pinOrtho() & occ) {
-            stmAttackers &= ~pinOrtho();
-        }
-
-        // Check we still have more attackers;
-        if (!stmAttackers) break;
+        // TODO: Remove pinned pieces here
 
         // Flip the result bit
         result ^= 1;
@@ -905,26 +972,26 @@ bool Position::see(Move move, int threshold) const {
         // Remove next attacker and add any x-ray attackers behind it to 'attackers'.
         if ((bb = stmAttackers & getPiecesBB(PAWN))) {
             if ((swap = VALUE_PAWN - swap) < result) break;
-            occ ^= bitscan(bb);
+            occ ^= lsbBitboard(bb);
             attackers |= attacks<BISHOP>(to, occ) & getPiecesBB(BISHOP, QUEEN);
 
         } else if ((bb = stmAttackers & getPiecesBB(KNIGHT))) {
             if ((swap = VALUE_KNIGHT - swap) < result) break;
-            occ ^= bitscan(bb);
+            occ ^= lsbBitboard(bb);
 
         } else if ((bb = stmAttackers & getPiecesBB(BISHOP))) {
             if ((swap = VALUE_BISHOP - swap) < result) break;
-            occ ^= bitscan(bb);
+            occ ^= lsbBitboard(bb);
             attackers |= attacks<BISHOP>(to, occ) & getPiecesBB(BISHOP, QUEEN);
 
         } else if ((bb = stmAttackers & getPiecesBB(ROOK))) {
             if ((swap = VALUE_ROOK - swap) < result) break;
-            occ ^= bitscan(bb);
+            occ ^= lsbBitboard(bb);
             attackers |= attacks<ROOK>(to, occ) & getPiecesBB(ROOK, QUEEN);
 
         } else if ((bb = stmAttackers & getPiecesBB(QUEEN))) {
             if ((swap = VALUE_QUEEN - swap) < result) break;
-            occ ^= bitscan(bb);
+            occ ^= lsbBitboard(bb);
             attackers |= (attacks<BISHOP>(to, occ) & getPiecesBB(BISHOP, QUEEN))
                        | (attacks<ROOK>(to, occ)   & getPiecesBB(ROOK, QUEEN));
 
@@ -947,10 +1014,10 @@ bool Position::givesCheck(const Move m) const {
     const Bitboard kingBB = sqToBB(ksq);
     const Square from     = moveFrom(m);
     const Square to       = moveTo(m);
-    const Bitboard occ    = getPiecesBB() ^ from ^ to;
+    const Bitboard occ    = getPiecesBB() ^ from;
 
     // Piece itself gives check
-    if (pieceSees(to, ksq, occ)) return true;
+    if (pieceSees(typeOf(getPieceAt(from)), to, kingBB, occ)) return true;
 
     // See if there is a discovered check
     const Bitboard rqAttack = attacks<ROOK>(to, occ);
@@ -961,25 +1028,33 @@ bool Position::givesCheck(const Move m) const {
 
     switch (moveTypeOf(m)) {
         case MT_NORMAL:
-        case MT_PROMOTION:
-            // Already run all the checks for normal and promotion
+            // Already run all the checks for normal moves;
+            // if we haven't already given check then the move does not
+            // give check.
             return false;
+
+        case MT_PROMOTION:
+            // Check to see if the piece we are promoting into gives a check
+            return pieceSees(movePromotionType(m), to, kingBB, occ);
 
         case MT_EN_PASSANT:
             {
                 // Already checked for the piece itself checking king,
-                // as well as discovered checks - now we need to check for
-                // en passant discovered checks on the same rank.
+                // so we only need to check to see if we have a discovered
+                // check through the captured pawn.
                 const Square epCapture    = createSquare(fileOf(to), rankOf(from));
                 const Bitboard occAfterEP = (getPiecesBB() ^ from ^ epCapture) | to;
-                constexpr Bitboard epRank = (Me == WHITE ? RANK_5_BB : RANK_4_BB);
 
+                // See if either of our sliding pieces can see the king after
+                // the en passant move has been made
                 return (
-                    ((kingBB & epRank) && getPiecesBB(Me, ROOK, QUEEN)) // King is on EP rank with ortho slider
-                    && ( attacks<ROOK>(ksq, occAfterEP) & getPiecesBB(Me, ROOK, QUEEN)) // Ortho slider can attack king
+                    attacks<ROOK>(ksq, occAfterEP)   & getPiecesBB(Me, ROOK, QUEEN)
+                 || attacks<BISHOP>(ksq, occAfterEP) & getPiecesBB(Me, BISHOP, QUEEN)
                 );
             }
-        default: // castling
+
+        default:
+            // castling
             // The king can't give check, see if the rook does
             if constexpr (Me == WHITE) {
                 return attacks<ROOK>(to > from ? SQ_F1 : SQ_D1, occ) & kingBB;

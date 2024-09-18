@@ -9,6 +9,8 @@
 #include "tunables.h"
 #include "types.h"
 
+#include "uci.h"
+
 namespace Atom {
 
 
@@ -22,18 +24,21 @@ void MovePicker<Me>::score() {
     constexpr int MAX_MOVEPICK_VAL = 1 << 20;
 
     constexpr Color Opp = ~Me;
-    Bitboard enemyPawnThreats, enemyMinorThreats = 0ull, enemyRookThreats = 0ull;
+    Bitboard enemyPawnThreats, enemyMinorThreats, enemyRookThreats;
     Bitboard allThreatenedPieces, enemies;
     const Bitboard occ = pos.getPiecesBB();
 
     if constexpr (MgType == Movegen::MG_TYPE_QUIET) {
         // Pawns
-        enemyPawnThreats  = allPawnAttacks<Opp>(pos.getPiecesBB(Opp, PAWN));
+        enemyPawnThreats = allPawnAttacks<Opp>(pos.getPiecesBB(Opp, PAWN));
+
+        // Pawns can also threaten the same pieces minors can
+        enemyMinorThreats = enemyPawnThreats;
 
         // Knights
         enemies = pos.getPiecesBB(Opp, KNIGHT);
         bitloop(enemies) {
-            enemyMinorThreats |= attacks<KNIGHT>(bitscan(enemies), occ);
+            enemyMinorThreats |= attacks<KNIGHT>(bitscan(enemies));
         }
 
         // Bishops
@@ -41,6 +46,9 @@ void MovePicker<Me>::score() {
         bitloop(enemies) {
             enemyMinorThreats |= attacks<BISHOP>(bitscan(enemies), occ);
         }
+
+        // Rooks can threaten the same pieces that pawns and minors can
+        enemyRookThreats = enemyMinorThreats;
 
         // Rooks
         enemies = pos.getPiecesBB(Opp, ROOK);
@@ -63,11 +71,12 @@ void MovePicker<Me>::score() {
 
             // Histories
             sm.score = (*butterflyHist)[pos.getSideToMove()][moveFromTo(sm.move)];
+            sm.score += 2 * (*pawnHist)[pawnStructureIndex(pos)][pc][to];
+            sm.score += 2 * (*continuationHist[0])[pc][to];
             sm.score += (*continuationHist[1])[pc][to];
             sm.score += (*continuationHist[2])[pc][to] / 3;
             sm.score += (*continuationHist[3])[pc][to];
             sm.score += (*continuationHist[5])[pc][to];
-            sm.score += 2 * (*continuationHist[0])[pc][to];
 
             // Killer move bonus
             sm.score =  (sm.move == killer) * Tunables::MOVEPICK_KILLER_SCORE;
@@ -106,7 +115,9 @@ void MovePicker<Me>::score() {
             if (cap || (moveTypeOf(sm.move) == MT_PROMOTION && movePromotionType(sm.move) == QUEEN)) {
                 sm.score = PIECE_VALUE[cap] + MAX_MOVEPICK_VAL - typeOf(pos.getPieceAt(moveFrom(sm.move)));
             } else {
-                sm.score = 0;
+                sm.score = (*butterflyHist)[Me][moveFromTo(sm.move)]
+                         + (*continuationHist[0])[pos.getPieceAt(moveFrom(sm.move))][moveTo(sm.move)]
+                         + (*pawnHist)[pawnStructureIndex(pos)][pos.getPieceAt(moveFrom(sm.move))][moveTo(sm.move)];
             }
         }
     }
@@ -142,9 +153,10 @@ ScoredMove MovePicker<Me>::select(Pred filter) {
 }
 
 
-
+// TODO: Move skipQuiet to template?
 template<Color Me>
 Move MovePicker<Me>::nextMove(bool skipQuiet) {
+
 top:
     switch (mpStage) {
 
@@ -163,6 +175,7 @@ top:
 
             MovePicker<Me>::score<Movegen::MG_TYPE_TACTICAL>();
             kSort(current, endMoves, std::numeric_limits<int>::min());
+
             ++mpStage;
 
             // Go back to the beginning to process stage

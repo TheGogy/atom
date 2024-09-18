@@ -10,7 +10,7 @@
 
 namespace Atom {
 
-using TTKey = uint64_t;
+using Key = uint64_t;
 
 constexpr size_t TT_DEFAULT_SIZE = 16;
 
@@ -52,8 +52,8 @@ struct TTEntry {
             .score = Value(score16),
             .eval  = Value(eval16),
             .depth = Depth(depth8 + DEPTH_DELTA),
-            .bound = Bound(depth8 & 0x3),
-            .isPv  = bool (depth8 & BOUND_MASK),
+            .bound = Bound(age8 & BOUND_MASK),
+            .isPv  = bool (age8 & PV_MASK),
         };
     }
 
@@ -64,12 +64,12 @@ struct TTEntry {
     }
 
     void save(
-        TTKey key, Value score, Value eval,
+        Key key, Value score, Value eval,
         Depth depth, bool isPv, Move move,
         uint8_t age, Bound bound
     );
 
-    inline bool hashEquals(TTKey key) const { return uint16_t(key) == key16; }
+    inline bool hashEquals(Key key) const { return uint16_t(key) == key16; }
 
     inline uint8_t age() const { return age8 & AGE_MASK; }
 
@@ -85,18 +85,18 @@ struct TTEntry {
 
       // Keep these in this order
       uint16_t key16;
-      uint8_t depth8;
-      uint8_t age8;
-      Move move16;
-      int16_t score16;
-      int16_t eval16;
+      uint8_t  depth8;
+      uint8_t  age8;
+      Move     move16;
+      int16_t  score16;
+      int16_t  eval16;
 };
 
 
 struct TTWriter {
 public:
     void write(
-        TTKey key, Value score, Value eval,
+        Key key, Value score, Value eval,
         Depth depth, bool isPv, Move move,
         uint8_t age, Bound bound
     );
@@ -126,13 +126,13 @@ public:
 
     ~TranspositionTable() { aligned_large_pages_free(table); }
 
-    inline TTEntry* lookup(const TTKey key) const {
+    inline TTEntry* lookup(const Key key) const {
         return &table[((unsigned __int128)key * (unsigned __int128)nbClusters) >> 64].entries[0];
     }
 
-    inline void prefetch(TTKey key) const { __builtin_prefetch(lookup(key)); }
+    inline void prefetch(Key key) const { __builtin_prefetch(lookup(key)); }
 
-    std::tuple<bool, TTData, TTWriter> probe(const TTKey key) const;
+    std::tuple<bool, TTData, TTWriter> probe(const Key key) const;
 
     // UCI commands
     int    hashfull() const;

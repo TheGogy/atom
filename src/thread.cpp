@@ -76,11 +76,13 @@ void ThreadPool::go(
 
     Search::RootMoveList rootMoves;
 
+    // Add all legal moves to rootMoves
     Movegen::enumerateLegalMoves(pos, [&](Move m) {
         rootMoves.push_back(Search::RootMove(m));
         return true;
     });
 
+    // Setup threads to be ready to search
     for (std::unique_ptr<Thread>& thread : threads) {
         thread->waitForFinish();
         thread->setupWorker(pos, rootMoves, limits);
@@ -105,6 +107,7 @@ void ThreadPool::startSearching() {
 }
 
 
+// Wait until this thread has finished searching
 void ThreadPool::waitForFinish() {
     for (std::unique_ptr<Thread>& thread : threads) {
         if (thread != threads.front()) thread->waitForFinish();
@@ -112,6 +115,7 @@ void ThreadPool::waitForFinish() {
 }
 
 
+// Clear all the threads in the threadpool.
 void ThreadPool::clearThreads() {
     if (threads.size() == 0) return;
 
@@ -124,6 +128,7 @@ void ThreadPool::clearThreads() {
 }
 
 
+// Set the number of threads to the specified value
 void ThreadPool::setNbThreads(size_t nbThreads, Search::SearchWorkerShared sharedState) {
     // Wait for existing threads to finish
     if (!threads.empty()) {

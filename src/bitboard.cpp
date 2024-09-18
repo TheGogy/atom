@@ -23,16 +23,14 @@ Bitboard BISHOP_DATA[0x1480];
 std::string visualizeBB(const Bitboard bb) {
     std::stringstream ss;
 
-    int sq;
+    Square s;
     ss << std::endl;
-    for (int rank = 7; rank >= 0; rank--) {
-        ss << " " << rank + 1 << "|";
-        for (int file = 0; file < 8; file++) {
-            sq = rank * 8 + file;
-            if (getBit(bb, sq))
-                ss << "# ";
-            else
-                ss << "· ";
+    for (int r = 7; r >= 0; r--) {
+        ss << " " << r + 1 << "|";
+        for (int f = 0; f < 8; f++) {
+            s = Square(r * 8 + f);
+            if (getBit(bb, s)) ss << "# ";
+            else               ss << "· ";
         }
         ss << std::endl;
     }
@@ -65,16 +63,16 @@ inline Bitboard slidingRay(Square sq, Bitboard occupied) {
 // Do not use this function for calculating attacks in game;
 // use attacks<PieceType>() instead.
 template <PieceType Pt> Bitboard slidingAttacks(Square sq, Bitboard occupied) {
-  if constexpr (Pt == ROOK)
-    return slidingRay<NORTH>(sq, occupied)
-         | slidingRay<SOUTH>(sq, occupied)
-         | slidingRay<EAST>(sq, occupied)
-         | slidingRay<WEST>(sq, occupied);
-  else
-    return slidingRay<NORTH_EAST>(sq, occupied)
-         | slidingRay<NORTH_WEST>(sq, occupied)
-         | slidingRay<SOUTH_EAST>(sq, occupied)
-         | slidingRay<SOUTH_WEST>(sq, occupied);
+    if constexpr (Pt == ROOK)
+        return slidingRay<NORTH>(sq, occupied)
+             | slidingRay<SOUTH>(sq, occupied)
+             | slidingRay<EAST>(sq, occupied)
+             | slidingRay<WEST>(sq, occupied);
+    else
+        return slidingRay<NORTH_EAST>(sq, occupied)
+             | slidingRay<NORTH_WEST>(sq, occupied)
+             | slidingRay<SOUTH_EAST>(sq, occupied)
+             | slidingRay<SOUTH_WEST>(sq, occupied);
 }
 
 
@@ -148,7 +146,7 @@ inline void initBetweenBB(Square x, Bitboard bb_x) {
             BETWEEN_BB[x][y] |= slidingAttacks<ROOK>(x, bb_y) & slidingAttacks<ROOK>(y, bb_x);
         } else if (slidingAttacks<BISHOP>(x, EMPTY) & bb_y) {
             BETWEEN_BB[x][y] |= slidingAttacks<BISHOP>(x, bb_y) & slidingAttacks<BISHOP>(y, bb_x);
-        } 
+        }
     }
 }
 
@@ -165,7 +163,6 @@ void initBBs() {
         initPext<ROOK>(s, ROOK_DATA, ROOK_MOVE);
         initPext<BISHOP>(s, BISHOP_DATA, BISHOP_MOVE);
     }
-
 }
 
 } // namespace Atom

@@ -225,8 +225,6 @@ Network<Arch, Transformer>::evaluate(const Position&                         pos
 
     ASSERT_ALIGNED(transformedFeatures, alignment);
 
-    std::cout << "cache " << cache->entries[0][0].accumulation[0] << std::endl;
-
     const int  bucket     = (pos.nPieces() - 1) / 4;
     const auto psqt       = featureTransformer->transform(pos, cache, transformedFeatures, bucket);
     const auto positional = network[bucket].propagate(transformedFeatures);

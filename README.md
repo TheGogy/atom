@@ -25,3 +25,9 @@ Move generation takes a lot of inspiration from [VincentBab](https://github.com/
 [perft_massive](./tests/perft_massive.txt) from [Elcabesa](https://github.com/elcabesa)'s engine, [Vajolet](https://github.com/elcabesa/vajolet).
 
 NNUE from [Stockfish](https://github.com/official-stockfish/Stockfish/). For more information, see [the NNUE readme in this repo](./src/nnue/README.md).
+
+## Todo
+
+- Time management
+- EGTB pruning
+- Testing for search
