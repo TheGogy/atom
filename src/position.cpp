@@ -7,7 +7,6 @@
 #include "zobrist.h"
 #include "uci.h"
 
-#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -20,7 +19,7 @@ const std::string_view PIECE_TO_CHAR(" PNBRQK  pnbrqk");
 
 // Updates all the required bitboards for the current
 // position.
-inline void Position::updateBitboards() { 
+inline void Position::updateBitboards() {
     sideToMove == WHITE ? updateBitboards<WHITE>() : updateBitboards<BLACK>(); 
 }
 
@@ -348,10 +347,10 @@ bool Position::setFromFEN(const std::string &fen) {
     parser >> std::skipws >> token;
     for (char c : token) {
         switch (c) {
-            case 'K': state->castlingRights |= WHITE_KING_SIDE;  break;
-            case 'Q': state->castlingRights |= WHITE_QUEEN_SIDE; break;
-            case 'k': state->castlingRights |= BLACK_KING_SIDE;  break;
-            case 'q': state->castlingRights |= BLACK_QUEEN_SIDE; break;
+            case 'K': state->castlingRights |= WHITE_OO;  break;
+            case 'Q': state->castlingRights |= WHITE_OOO; break;
+            case 'k': state->castlingRights |= BLACK_OO;  break;
+            case 'q': state->castlingRights |= BLACK_OOO; break;
             case '-': break;
             default:
                 reset();
@@ -417,10 +416,10 @@ std::string Position::fen() const {
     ss << (sideToMove == WHITE ? " w " : " b ");
 
     // Castling rights
-    if (canCastle(WHITE_KING_SIDE))  ss << 'K';
-    if (canCastle(WHITE_QUEEN_SIDE)) ss << 'Q';
-    if (canCastle(BLACK_KING_SIDE))  ss << 'k';
-    if (canCastle(BLACK_KING_SIDE))  ss << 'q';
+    if (canCastle(WHITE_OO))  ss << 'K';
+    if (canCastle(WHITE_OOO)) ss << 'Q';
+    if (canCastle(BLACK_OO))  ss << 'k';
+    if (canCastle(BLACK_OO))  ss << 'q';
     if (!canCastle(ALL_CASTLING))    ss << '-';
 
     // En passant square

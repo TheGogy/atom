@@ -251,8 +251,8 @@ inline bool Position::isMaterialDraw() const {
         (getPiecesBB(PAWN) | getPiecesBB(ROOK) | getPiecesBB(QUEEN)) ||
 
         // No bishop pairs
-        (((getPiecesBB(WHITE, BISHOP) & LIGHT_SQUARES) && (getPiecesBB(WHITE, BISHOP) & DARK_SQUARES))  ||
-         ((getPiecesBB(BLACK, BISHOP) & LIGHT_SQUARES) && (getPiecesBB(BLACK, BISHOP) & DARK_SQUARES))) ||
+        (((getPiecesBB(WHITE, BISHOP) & LIGHT_SQUARES_BB) && (getPiecesBB(WHITE, BISHOP) & DARK_SQUARES_BB))  ||
+         ((getPiecesBB(BLACK, BISHOP) & LIGHT_SQUARES_BB) && (getPiecesBB(BLACK, BISHOP) & DARK_SQUARES_BB))) ||
 
         // Less than 3 knights for either side
         ((popcount(getPiecesBB(WHITE, KNIGHT)) < 3) || popcount(getPiecesBB(BLACK, KNIGHT)) < 3))

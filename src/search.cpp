@@ -126,7 +126,7 @@ void SearchWorker::startSearch() {
 }
 
 
-template<Color Me>
+template <Color Me>
 void SearchWorker::iterativeDeepening() {
 
     Value bestScore = -VALUE_INFINITE;
@@ -232,7 +232,7 @@ void SearchWorker::iterativeDeepening() {
 
 
 // TODO: Add CutNode to template?
-template<Color Me, NodeType NT>
+template <Color Me, NodeType NT>
 Value SearchWorker::pvSearch(
     Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth, bool cutNode
 ) {
@@ -768,7 +768,7 @@ Value SearchWorker::pvSearch(
 // This recursively searches moves on the search horizon, to ensure
 // that the static evaluation is not confused by tactical moves and misjudges
 // a capture.
-template<Color Me, NodeType NT>
+template <Color Me, NodeType NT>
 Value SearchWorker::qSearch(
     Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth
 ) {

@@ -10,10 +10,10 @@
 
 namespace Atom {
 
+
 template <bool Div, Color Me>
 std::uint64_t perft(Position &pos, int depth) {
     std::uint64_t total = 0;
-    MoveList moves;
 
     if (!Div && depth <= 1) {
         Movegen::enumerateLegalMoves<Me>(pos, [&](Move m) {
@@ -27,18 +27,19 @@ std::uint64_t perft(Position &pos, int depth) {
     Movegen::enumerateLegalMoves<Me>(pos, [&](Move move) {
         std::uint64_t n = 0;
 
-        if (Div && depth == 1) {
-            n = 1;
+        if (depth == 1) {
+            n = Div ? 1 : 0;
         } else {
             pos.doMove<Me>(move);
-            n = (depth == 1 ? 1 : perft<false, ~Me>(pos, depth - 1));
+            n = perft<false, ~Me>(pos, depth - 1);
             pos.undoMove<Me>(move);
         }
 
         total += n;
 
-        if (Div && n > 0)
+        if (Div && n > 0) {
             std::cout << Uci::formatMove(move) << ": " << n << std::endl;
+        }
 
         return true;
     });
@@ -46,18 +47,21 @@ std::uint64_t perft(Position &pos, int depth) {
     return total;
 }
 
-template std::uint64_t perft<true, WHITE>(Position &pos, int depth);
+template std::uint64_t perft<true,  WHITE>(Position &pos, int depth);
 template std::uint64_t perft<false, WHITE>(Position &pos, int depth);
-template std::uint64_t perft<true, BLACK>(Position &pos, int depth);
+template std::uint64_t perft<true,  BLACK>(Position &pos, int depth);
 template std::uint64_t perft<false, BLACK>(Position &pos, int depth);
 
-template<bool Div>
+
+template <bool Div>
 std::uint64_t perft(Position &pos, int depth) {
     return pos.getSideToMove() == WHITE ? perft<Div, WHITE>(pos, depth) : perft<Div, BLACK>(pos, depth);
 }
 
+
 template std::uint64_t perft<true>(Position &pos, int depth);
 template std::uint64_t perft<false>(Position &pos, int depth);
+
 
 void perft(Position &pos, int depth) {
     long start = now();
@@ -76,6 +80,7 @@ void perft(Position &pos, int depth) {
     }
 }
 
+
 bool runTest(const std::string &fen, int depth, Bitboard expected) {
     Position pos;
     pos.setFromFEN(fen);
@@ -88,6 +93,7 @@ bool runTest(const std::string &fen, int depth, Bitboard expected) {
         return false;
     }
 }
+
 
 void testFromFile(const std::string &filename) {
     std::ifstream file(filename);
@@ -135,5 +141,6 @@ void testFromFile(const std::string &filename) {
     std::cout << "Total tests:      " << total << std::endl;
     std::cout << "Tests passed:     " << passed << std::endl;
 }
+
 
 } // namespace Atom

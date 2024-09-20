@@ -23,6 +23,14 @@ constexpr int     AGE_DELTA   = 0x8;
 constexpr int     AGE_CYCLE   = 0xFF + AGE_DELTA;
 
 
+enum Bound {
+    BOUND_NONE,
+    BOUND_UPPER,
+    BOUND_LOWER,
+    BOUND_EXACT = BOUND_UPPER | BOUND_LOWER
+};
+
+
 inline Value valueToTT(Value v, int ply) {
     return v >= VALUE_TB_WIN_IN_MAX_PLY ? v + ply : v <= VALUE_TB_LOSS_IN_MAX_PLY ? v - ply : v;
 }

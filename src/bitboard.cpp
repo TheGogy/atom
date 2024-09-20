@@ -46,7 +46,7 @@ std::string visualizeBB(const Bitboard bb) {
 // This will go up to the occupied piece and stop there, including the occupied
 // piece in the bitboard.
 // Used to initialize sliding piece attacks.
-template<Direction D>
+template <Direction D>
 inline Bitboard slidingRay(Square sq, Bitboard occupied) {
     Bitboard attacks = 0;
     Bitboard attacked_sq = sqToBB(sq);
@@ -77,7 +77,7 @@ template <PieceType Pt> Bitboard slidingAttacks(Square sq, Bitboard occupied) {
 
 
 // Initializes the PEXT lookup table for a given sliding piece.
-template<PieceType Pt>
+template <PieceType Pt>
 void initPext(Square s, Bitboard table[], PextEntry magics[]) {
     static int size = 0;
     Bitboard edges, occ;
@@ -86,8 +86,8 @@ void initPext(Square s, Bitboard table[], PextEntry magics[]) {
     const Bitboard rankEdges = RANK_1_BB | RANK_8_BB;
     const Bitboard fileEdges = FILE_A_BB | FILE_H_BB;
 
-    edges = (rankEdges & ~sq_to_bb(rankOf(s)))
-          | (fileEdges & ~sq_to_bb(fileOf(s)));
+    edges = (rankEdges & ~rankBB(rankOf(s)))
+          | (fileEdges & ~fileBB(fileOf(s)));
 
     PextEntry& magicEntry = magics[s];
     magicEntry.mask = slidingAttacks<Pt>(s, 0) & ~edges;
