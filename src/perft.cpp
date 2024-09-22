@@ -140,6 +140,7 @@ void testFromFile(const std::string &filename) {
     std::cout << "Perft results for " << filename << std::endl;
     std::cout << "Total tests:      " << total << std::endl;
     std::cout << "Tests passed:     " << passed << std::endl;
+    std::cout << std::endl << std::endl;
 }
 
 

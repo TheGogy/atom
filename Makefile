@@ -23,7 +23,7 @@ BMI2FLAGS     += -DUSE_BMI2
 AVX512FLAGS   += -DUSE_AVX512
 VNNI512FLAGS  += -DUSE_VNNI
 
-CPUFLAGS := $(shell ./detect_cpu_flags.sh)
+CPUFLAGS := $(shell ./scripts/detect_cpu_flags.sh)
 
 CXXFLAGS := $($(CPUFLAGS))
 LDFLAGS := $($(CPUFLAGS))
@@ -36,9 +36,12 @@ DEBUG_LDFLAGS := $(LDFLAGS)
 RELEASE_LDFLAGS := $(LDFLAGS) -s -static -flto -flto-partition=one -flto=jobserver
 PROFILE_LDFLAGS := $(LDFLAGS) -g -static -flto -flto-partition=one -flto=jobserver
 
-.PHONY: all debug release profile clean
+.PHONY: all nnue debug release profile clean
 
-all: release
+all: nnue release
+
+nnue:
+	./scripts/nnue.sh
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<

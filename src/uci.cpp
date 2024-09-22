@@ -9,6 +9,7 @@
 #include "uci.h"
 #include "movegen.h"
 #include "nnue.h"
+#include "perft.h"
 #include "position.h"
 #include "search.h"
 #include "types.h"
@@ -16,6 +17,7 @@
 namespace Atom {
 
 
+// Converts a string into its lowercase version
 std::string Uci::toLower(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), [](auto c) { 
         return std::tolower(c); 
@@ -93,6 +95,7 @@ struct WinRateParams {
     double b;
 };
 
+// Gets the win rate parameters. From stockfish.
 WinRateParams getWinRateParams(const Position &pos) {
     int material = pos.nPieces(PAWN) +
                    pos.nPieces(KNIGHT) * 3 +
@@ -117,6 +120,13 @@ int Uci::toCentipawns(Value v, const Position &pos) {
 }
 
 
+// Formats the score to a readable value.
+// If no mate has been found:
+//      cp <x>   : where x is score in ceptipawns
+//
+// Else :
+//      mate <x> : Where x is the plies until mate
+//
 std::string Uci::formatScore(const Value& score, const Position& pos) {
     constexpr int TB_TO_CP = 20000;
 
@@ -150,6 +160,7 @@ std::string Uci::formatScore(const Value& score, const Position& pos) {
 // UCI callbacks
 //
 
+// Callback when te engine has found the best move and would like to stop searching.
 void Uci::callbackBestMove(const std::string_view bestmove, const std::string_view ponder) {
     std::cout << "bestmove " << bestmove;
     if (!ponder.empty()) std::cout << " ponder " << ponder;
@@ -157,6 +168,8 @@ void Uci::callbackBestMove(const std::string_view bestmove, const std::string_vi
 }
 
 
+// Callback giving as much data as possible to the GUI.
+// This should be called whenever the engine has updated its depth
 void Uci::callbackInfo(const Search::SearchInfo info) {
     std::stringstream ss;
 
@@ -174,7 +187,8 @@ void Uci::callbackInfo(const Search::SearchInfo info) {
     std::cout << ss.str() << std::endl;
 }
 
-
+// Callback when the engine is currently searching a specific move.
+// This should not be called too frequently, as this can spam the GUI.
 void Uci::callbackIter(const Depth depth, const Move currmove, const int currmovenumber) {
     std::stringstream ss;
 
@@ -219,6 +233,8 @@ void Uci::loop() {
             cmdStop();
         } else if (token == "perft") {
             cmdPerft(is);
+        } else if (token == "perftfile") {
+            cmdPerftFile(is);
         } else if (token == "debug" || token == "d") {
             cmdDebug();
         } else if (token == "quit") {
@@ -249,6 +265,7 @@ void Uci::loop() {
 // | go (wtime, btime etc)             | * Searches current position                  |
 // | stop                              |   Finish search threads and report bestmove  |
 // | perft <depth>                     |   Runs perft on current pos to given depth   |
+// | perftfile <file>                  |   Runs all perft tests within a given flie   |
 // | debug (or just "d")               |   Prints the current position + debug info   |
 // | quit                              |   Ends the process                           |
 // | clear                             |   Clears the terminal                        |
@@ -418,6 +435,12 @@ void Uci::cmdPerft(std::istringstream& is) {
 
     std::cout << "Running perft at depth: " << depth << std::endl;
     engine.runPerft(depth);
+}
+
+void Uci::cmdPerftFile(std::istringstream& is) {
+    std::string filename;
+    is >> filename;
+    testFromFile(filename);
 }
 
 void Uci::cmdDebug() {

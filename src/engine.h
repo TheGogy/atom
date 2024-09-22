@@ -36,7 +36,7 @@ public:
     std::string visualizeThreatened() { return visualizeBB(pos.threatened()); }
 
     // NNUE
-    void loadNetworks();
+    void loadInternalNNUEs();
     void loadBigNetFromFile(const std::string& path);
     void loadSmallNetFromFile(const std::string& path);
     void verifyNetworks();

@@ -12,7 +12,7 @@
 
 namespace Atom {
 
-#define ENGINE_VERSION "0.1 pre-alpha"
+#define ENGINE_VERSION "1.0.0"
 
 class Uci {
 public:
@@ -50,6 +50,7 @@ private:
     void cmdStop();
     void cmdQuit();
     void cmdPerft(std::istringstream& is);
+    void cmdPerftFile(std::istringstream& is);
     void cmdDebug();
     void cmdVisualize(std::istringstream& is);
     void cmdEval();

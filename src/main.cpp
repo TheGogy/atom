@@ -16,7 +16,13 @@ void initEverything() {
 int main (int argc, char *argv[]) {
     initEverything();
 
-    std::cout << "Atom v" << ENGINE_VERSION << std::endl;
+    std::cout << "Atom v" << ENGINE_VERSION;
+#ifdef RELEASE
+    std::cout << " (release)";
+#elif defined(DEBUG)
+    std::cout << " (debug)";
+#endif
+    std::cout << " built " << __DATE__ << " " << __TIME__ << std::endl;
 
     Uci uci;
     uci.loop();

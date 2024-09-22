@@ -101,6 +101,7 @@ inline Bitboard sliderAttacks(Square sq, Bitboard occupied) {
 // For pawns, use pawnAttacks().
 template<PieceType Pt>
 inline Bitboard attacks(Square sq, Bitboard occupied = 0) {
+    assert(Pt != PAWN && Pt != NO_PIECE_TYPE && Pt != PIECE_TYPE_NB);
     if constexpr (Pt == KING)   return KING_MOVE[sq];
     if constexpr (Pt == KNIGHT) return KNIGHT_MOVE[sq];
     if constexpr (Pt == BISHOP) return sliderAttacks<BISHOP>(sq, occupied);

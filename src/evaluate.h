@@ -23,6 +23,8 @@ inline Value blendNnue(const int psqt, const int positional) {
 }
 
 
+// Calculates how much piece value each side has, and returns
+// value(our pieces) - value (their pieces)
 template <Color Me>
 inline Value pieceValueEval(const Position& pos) {
     constexpr Color Opp = ~Me;
@@ -35,6 +37,7 @@ inline Value pieceValueEval(const Position& pos) {
 }
 
 
+// Calculates the total material on the board, with both our piees and the opponent's pieces.
 inline Value totalMaterial(const Position& pos, bool smallNet) {
     return (smallNet ? Tunables::PAWN_VALUE_SMALLNET : Tunables::PAWN_VALUE_BIGNET) * pos.nPieces(PAWN)
          + VALUE_KNIGHT * pos.nPieces(KNIGHT)
@@ -56,6 +59,7 @@ Value evaluate(
     // Positions where we are in check should not be evaluated: qsearch should search deeper.
     assert(!pos.checkers());
 
+    // Get evaluation from various sources
     const Value pvEval = pieceValueEval<Me>(pos);
     bool smallNet = abs(pvEval) > Tunables::NNUE_SMALL_NET_THRESHOLD;
     auto [psqt, positional] = smallNet
@@ -81,6 +85,7 @@ Value evaluate(
     // Update optimism
     optimism += optimism * complexity / (smallNet ? Tunables::OPTIMISM_SMALLNET_DAMPING : Tunables::OPTIMISM_BIGNET_DAMPING);
 
+    // Get the total material on the board. This is used to scale the evaluation properly.
     Value material = totalMaterial(pos, smallNet);
 
     // Final evaluation is a blend between the piece value evaluation and the NNUE evaluation

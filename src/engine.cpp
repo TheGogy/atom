@@ -25,7 +25,7 @@ Engine::Engine() :
         NNUE::NetworkSmall({EvalFileDefaultNameSmall, "None", ""}, NNUE::EmbeddedNNUEType::SMALL)
         )
     ) {
-    loadNetworks();
+    loadInternalNNUEs();
     Search::SearchWorkerShared sharedState = {threads, networks, tt};
     threads.setNbThreads(NB_THREADS_DEFAULT, sharedState);
 }
@@ -75,7 +75,7 @@ void Engine::runPerft(int depth) {
 
 
 // Loads the internal NNUE networks
-void Engine::loadNetworks() {
+void Engine::loadInternalNNUEs() {
     networks.big.load("<internal>", EvalFileDefaultNameBig);
     networks.small.load("<internal>", EvalFileDefaultNameSmall);
     verifyNetworks();
@@ -107,16 +107,20 @@ void Engine::loadSmallNetFromFile(const std::string& path) {
 //  For more info, see uci.cpp
 //
 
+// UCI Go command. Starts searching at the current position.
 void Engine::go(Search::SearchLimits limits) {
     threads.go(pos, limits);
 }
 
 
+// UCI stop command. Stops searching at the current position and returns bestmove.
 void Engine::stop() {
     threads.shouldStop = true;
 }
 
 
+// Traces the evaluation from the current position and shows the contributions
+// of various evaluation sources.
 void Engine::traceEval() {
     verifyNetworks();
 
