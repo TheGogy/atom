@@ -40,10 +40,10 @@ std::string visualizeBB(const Bitboard bb);
 template<Direction D>
 constexpr Bitboard shift(Bitboard b) {
     switch(D) {
-        case NORTH: return b << 8;
-        case SOUTH: return b >> 8;
-        case EAST:  return (b & ~FILE_H_BB) << 1;
-        case WEST:  return (b & ~FILE_A_BB) >> 1;
+        case NORTH:      return b << 8;
+        case SOUTH:      return b >> 8;
+        case EAST:       return (b & ~FILE_H_BB) << 1;
+        case WEST:       return (b & ~FILE_A_BB) >> 1;
         case NORTH_EAST: return (b & ~FILE_H_BB) << 9;
         case NORTH_WEST: return (b & ~FILE_A_BB) << 7;
         case SOUTH_EAST: return (b & ~FILE_H_BB) >> 7;

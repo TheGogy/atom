@@ -132,10 +132,10 @@ void Engine::traceEval() {
     std::cout << NNUE::trace(pos, networks, *caches) << std::endl;
 
     Value v = pos.getSideToMove() == WHITE
-        ? Eval::evaluate<WHITE>(pos, networks, *caches, 0)
-        : Eval::evaluate<BLACK>(pos, networks, *caches, 0);
+        ?  Eval::evaluate<WHITE>(pos, networks, *caches, 0)
+        : -Eval::evaluate<BLACK>(pos, networks, *caches, 0);
 
-    std::cout << "final evaluation: " << 0.01 * Uci::toCentipawns(v, pos) << std::endl;
+    std::cout << "final evaluation: " << 0.01 * Uci::toCentipawns(v, pos) << " (white's perspective)" << std::endl;
 }
 
 

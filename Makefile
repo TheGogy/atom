@@ -2,9 +2,12 @@ CXX := g++
 # CXX := clang++
 
 TARGET_EXEC := atom
+BUILD_DIR := build
 SRC_DIRS := src src/incbin src/nnue src/nnue/features src/nnue/layers
+
+# Create list of source files and corresponding object files in build dir
 SOURCES := $(wildcard $(addsuffix /*.cpp,$(SRC_DIRS)))
-OBJECTS := $(SOURCES:.cpp=.o)
+OBJECTS := $(SOURCES:%.cpp=$(BUILD_DIR)/%.o)
 
 # Setup CPU flags
 COMMONFLAGS  := -Wall -std=c++20 -fno-rtti
@@ -43,7 +46,9 @@ all: nnue release
 nnue:
 	./scripts/nnue.sh
 
-%.o: %.cpp
+# Create build directories and compile object files
+$(BUILD_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 debug: CXXFLAGS := $(DEBUG_CXXFLAGS)
@@ -62,5 +67,5 @@ $(TARGET_EXEC): $(OBJECTS)
 	$(CXX) $(LDFLAGS) -o $@ $^
 
 clean:
-	rm -rf $(OBJECTS)
+	rm -rf $(BUILD_DIR)
 	rm -f $(TARGET_EXEC)

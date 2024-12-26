@@ -2,7 +2,10 @@
 
 A basic chess bot written as a fun / learning / hobby project in C++. Still in development, expect many bugs!
 
-Current perft score (i5-11400H @ 2.7GHz, max 4.5GHz):
+> [!NOTE]
+> This bot does not have time control support; it will run indefinitely. To play it, you should manually set a max search depth.
+
+Current perft score (i5-11400H @ 4.5GHz):
 - starting position (depth 7): 3195901860 nodes, 4250 ms, 751976908 nps
 - kiwipete position (depth 7): 374190009323 nodes, 274811 ms, 1361626751 nps
 

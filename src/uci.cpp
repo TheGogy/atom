@@ -19,8 +19,8 @@ namespace Atom {
 
 // Converts a string into its lowercase version
 std::string Uci::toLower(std::string s) {
-    std::transform(s.begin(), s.end(), s.begin(), [](auto c) { 
-        return std::tolower(c); 
+    std::transform(s.begin(), s.end(), s.begin(), [](auto c) {
+        return std::tolower(c);
     });
 
     return s;
@@ -95,6 +95,7 @@ struct WinRateParams {
     double b;
 };
 
+
 // Gets the win rate parameters. From stockfish.
 WinRateParams getWinRateParams(const Position &pos) {
     int material = pos.nPieces(PAWN) +
@@ -112,6 +113,7 @@ WinRateParams getWinRateParams(const Position &pos) {
 
     return {a, b};
 }
+
 
 // Gets the current win rate parameters in centipawns. From stockfish.
 int Uci::toCentipawns(Value v, const Position &pos) {
@@ -186,6 +188,7 @@ void Uci::callbackInfo(const Search::SearchInfo info) {
 
     std::cout << ss.str() << std::endl;
 }
+
 
 // Callback when the engine is currently searching a specific move.
 // This should not be called too frequently, as this can spam the GUI.

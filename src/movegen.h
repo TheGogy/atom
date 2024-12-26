@@ -132,11 +132,10 @@ inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, co
     constexpr Direction pawnDir = pawnDirection(Me);
     constexpr Bitboard epRank = (Me == WHITE ? RANK_5_BB : RANK_4_BB);
 
-    const Bitboard pinOrtho  = pos.pinOrtho();
-    const Bitboard pinDiag   = pos.pinDiag();
-    const Bitboard checkMask = pos.checkMask();
-
     if (pos.getEpSquare() != SQ_NONE) {
+        const Bitboard pinOrtho  = pos.pinOrtho();
+        const Bitboard pinDiag   = pos.pinDiag();
+        const Bitboard checkMask = pos.checkMask();
 
         // The piece that we will capture through en passant
         const Bitboard epcaptured = sqToBB(pos.getEpSquare() - pawnDir);
@@ -183,8 +182,8 @@ inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, co
 template<Color Me, bool InCheck, MoveGenType MgType = MG_TYPE_ALL, typename Handler>
 inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const Handler& handler) {
     constexpr Color Opp = ~Me;
-    constexpr Bitboard Rank3 = (Me == WHITE) ? RANK_3_BB : RANK_6_BB;
-    constexpr Bitboard Rank7 = (Me == WHITE) ? RANK_7_BB : RANK_2_BB;
+    constexpr Bitboard Rank3    = (Me == WHITE) ? RANK_3_BB : RANK_6_BB;
+    constexpr Bitboard Rank7    = (Me == WHITE) ? RANK_7_BB : RANK_2_BB;
     constexpr Direction Up      = (Me == WHITE) ? NORTH : SOUTH;
     constexpr Direction UpLeft  = (Me == WHITE) ? NORTH_WEST : SOUTH_EAST;
     constexpr Direction UpRight = (Me == WHITE) ? NORTH_EAST : SOUTH_WEST;

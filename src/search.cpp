@@ -236,7 +236,6 @@ template <Color Me, NodeType NT>
 Value SearchWorker::pvSearch(
     Position& pos, StackObject* sPtr, Value alpha, Value beta, Depth depth, bool cutNode
 ) {
-
     constexpr bool PvNode   = (NT != NODETYPE_NON_PV);
     constexpr bool RootNode = (NT == NODETYPE_ROOT);
     constexpr NodeType QNodeType = (PvNode ? NODETYPE_PV : NODETYPE_NON_PV);
@@ -337,9 +336,12 @@ Value SearchWorker::pvSearch(
 
         } else {
             rawEval = Eval::evaluate<Me>(pos, networks, cacheTable, thisThread->optimism[Me]);
+
             sPtr->staticEval = eval = correctStaticEval<Me>(rawEval, pos);
+
             ttWriter.write(pos.hash(), VALUE_NONE, rawEval, -2, sPtr->ttPv,
                          MOVE_NONE, tt.getAge(), BOUND_NONE);
+
         }
 
         // Check if we are improving / opponent is worsening
@@ -854,6 +856,7 @@ Value SearchWorker::qSearch(
                 bestScore = (beta + 3 * bestScore) / 4;
             }
 
+            // Write to transposition table
             if (!sPtr->ttHit) {
                 ttWriter.write(
                     pos.hash(),
@@ -978,6 +981,7 @@ Value SearchWorker::qSearch(
 
         assert(score > -VALUE_INFINITE && score < VALUE_INFINITE);
 
+        // See if move is better than our current best move
         if (score > bestScore) {
             bestScore = score;
 
@@ -989,13 +993,13 @@ Value SearchWorker::qSearch(
                     updatePv(sPtr->pv, currentMove, (sPtr + 1)->pv);
                 }
 
+                // Update alpha
                 if (score < beta) {
-                    // Update alpha
                     alpha = score;
                 }
 
+                // Fail high
                 else {
-                    // Fail high
                     break;
                 }
             }

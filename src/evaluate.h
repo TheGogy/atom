@@ -77,7 +77,6 @@ Value evaluate(
         smallNet = false;
     }
 
-
     // Calculate complexity and subtract from eval
     Value complexity = std::abs(psqt - positional);
     nnueEval -= nnueEval * complexity / (smallNet ? Tunables::NNUE_COMPLEXITY_SMALL : Tunables::NNUE_COMPLEXITY_BIG);
