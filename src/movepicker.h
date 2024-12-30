@@ -119,18 +119,16 @@ inline MovePickStage operator+(MovePickStage s, int i) {
 
 
 inline void kSort(ScoredMove* start, ScoredMove* end, int limit) {
-    for (ScoredMove* sortedEnd = start, *current = start + 1; current < end; ++current) {
-        if (current->score >= limit) {
-            ScoredMove temp = *current;
-            *current = *++sortedEnd;
-            ScoredMove* insertionPoint = sortedEnd;
-            while (insertionPoint != start && *(insertionPoint - 1) < temp) {
-                *insertionPoint = *(insertionPoint - 1);
-                --insertionPoint;
+    for (ScoredMove* sortedEnd = start, *p = start + 1; p < end; ++p)
+        if (p->score >= limit)
+        {
+            ScoredMove tmp = *p, *q;
+            *p = *++sortedEnd;
+            for (q = sortedEnd; q != start && *(q - 1) < tmp; --q) {
+                *q = *(q - 1);
             }
-            *insertionPoint = temp;
+            *q = tmp;
         }
-    }
 }
 
 
@@ -195,8 +193,13 @@ private:
         return (*captureHist)[pos.getPieceAt(moveFrom(m))][moveTo(m)][typeOf(pos.getPieceAt(moveTo(m)))];
     }
 
-    template<MovePickType MpType, typename Pred>
+    template<typename Pred>
     ScoredMove select(Pred filter);
+
+
+    // Allows for iteration over the moves
+    ScoredMove* begin() { return current; }
+    ScoredMove* end()   { return endMoves; }
 };
 
 

@@ -308,7 +308,7 @@ private:
         bonus = bonus * 52 / 64;
         for (int i : {1, 2, 3, 4, 6}) {
             if (sPtr->inCheck && i > 2) break;
-            if (isValidMove((sPtr - i)->currentMove)) {
+            if (isNotNullMove((sPtr - i)->currentMove)) {
                 (*(sPtr - i)->continuationHist)[pc][to] << bonus / (1 + (i == 3));
             }
         }

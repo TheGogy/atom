@@ -48,15 +48,21 @@ inline void Position::updateThreatened() {
 
     // Knights
     enemies = getPiecesBB(Opp, KNIGHT);
-    bitloop(enemies) threatened |= KNIGHT_MOVE[bitscan(enemies)];
+    loopOverBits(enemies, [&](Square s) {
+        threatened |= KNIGHT_MOVE[s];
+    });
 
     // Bishops + queens
     enemies = getPiecesBB(Opp, BISHOP, QUEEN);
-    bitloop(enemies) threatened |= attacks<BISHOP>(bitscan(enemies), occ);
+    loopOverBits(enemies, [&](Square s) {
+        threatened |= attacks<BISHOP>(s, occ);
+    });
 
     // Rooks + queens
     enemies = getPiecesBB(Opp, ROOK, QUEEN);
-    bitloop(enemies) threatened |= attacks<ROOK>(bitscan(enemies), occ);
+    loopOverBits(enemies, [&](Square s) {
+        threatened |= attacks<ROOK>(s, occ);
+    });
 
     // King
     threatened |= attacks<KING>(getKingSquare(Opp));
@@ -94,10 +100,9 @@ inline void Position::updateThreatened() {
 template<Color Me, bool InCheck>
 inline void Position::updatePinsAndCheckMask() {
     constexpr Color Opp = ~Me;
-    const Square ksq = getKingSquare(Me);
+    const Square ksq       = getKingSquare(Me);
     const Bitboard opp_occ = getPiecesBB(Opp);
-    const Bitboard my_occ = getPiecesBB(Me);
-    Square s;
+    const Bitboard my_occ  = getPiecesBB(Me);
     Bitboard pinDiag = EMPTY, pinOrtho = EMPTY;
     Bitboard checkmask, between;
 
@@ -109,27 +114,25 @@ inline void Position::updatePinsAndCheckMask() {
 
     // Bishops and queens
     Bitboard pinners = (attacks<BISHOP>(ksq, opp_occ) & getPiecesBB(Opp, BISHOP, QUEEN));
-    bitloop(pinners) {
-        s = bitscan(pinners);
+    loopOverBits(pinners, [&](Square s) {
         between = BETWEEN_BB[ksq][s];
 
         switch(popcount(between & my_occ)) {
             case 0: if constexpr (InCheck) checkmask |= between | sqToBB(s); break;
             case 1: pinDiag |= between | sqToBB(s);
         }
-    }
+    });
 
     // Rooks and queens
     pinners = (attacks<ROOK>(ksq, opp_occ) & getPiecesBB(Opp, ROOK, QUEEN));
-    bitloop(pinners) {
-        s = bitscan(pinners);
+    loopOverBits(pinners, [&](Square s) {
         between = BETWEEN_BB[ksq][s];
 
         switch(popcount(between & my_occ)) {
             case 0: if constexpr (InCheck) checkmask |= between | sqToBB(s); break;
             case 1: pinOrtho |= between | sqToBB(s);
         }
-    }
+    });
 
     state->pinDiag = pinDiag;
     state->pinOrtho = pinOrtho;
@@ -169,14 +172,12 @@ Key Position::computeHash() const {
     Key hash = 0;
 
     Piece p;
-    Square s;
     Bitboard pieces = getPiecesBB();
 
-    bitloop(pieces) {
-        s = bitscan(pieces);
+    loopOverBits(pieces, [&](Square s) {
         p = getPieceAt(s);
         hash ^= Zobrist::keys[p][s];
-    }
+    });
 
     hash ^= Zobrist::castlingKeys[getCastlingRights()];
     if (getEpSquare() != SQ_NONE) hash ^= Zobrist::enpassantKeys[fileOf(getEpSquare())];
@@ -192,14 +193,12 @@ Key Position::computePawnKey() const {
     Key pawnKey = Zobrist::noPawnsKey;
 
     Piece p;
-    Square s;
     Bitboard allPawns = getPiecesBB(PAWN);
 
-    bitloop(allPawns) {
-        s = bitscan(allPawns);
+    loopOverBits(allPawns, [&](Square s) {
         p = getPieceAt(s);
         pawnKey ^= Zobrist::keys[p][s];
-    }
+    });
 
     return pawnKey;
 }
@@ -1007,6 +1006,8 @@ bool Position::see(Move move, int threshold) const {
 
 template<Color Me>
 bool Position::givesCheck(const Move m) const {
+    assert(isValidMove(m));
+
     constexpr Color Opp   = ~Me;
 
     const Square ksq      = getKingSquare(Opp);

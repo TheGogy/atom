@@ -675,14 +675,12 @@ class FeatureTransformer {
                 Bitboard       toRemove = oldBB & ~newBB;
                 Bitboard       toAdd    = newBB & ~oldBB;
 
-                bitloop (toRemove) {
-                    Square sq = bitscan(toRemove);
+                loopOverBits(toRemove, [&](Square sq) {
                     removed.push_back(FeatureSet::make_index<Perspective>(sq, piece, ksq));
-                }
-                bitloop (toAdd) {
-                    Square sq = bitscan(toAdd);
+                });
+                loopOverBits(toAdd, [&](Square sq) {
                     added.push_back(FeatureSet::make_index<Perspective>(sq, piece, ksq));
-                }
+                });
             }
         }
 

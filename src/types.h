@@ -54,6 +54,12 @@ constexpr Bitboard sqToBB(Square s) {
 }
 
 
+// Check if bitboard has only one bit set
+constexpr bool hasOneBit(Bitboard b) {
+    return __builtin_popcountll(b) == 1;
+}
+
+
 //
 // Files and ranks
 //
@@ -140,6 +146,12 @@ enum PieceType {
     PIECE_TYPE_NB = 8
 };
 
+// Check if a piece type is valid
+constexpr bool isValidPieceType(PieceType pt) {
+    return pt >= PAWN && pt < PIECE_TYPE_NB;
+}
+
+
 enum Piece {
     NO_PIECE,
     W_PAWN = PAWN,     W_KNIGHT, W_BISHOP, W_ROOK, W_QUEEN, W_KING,
@@ -147,6 +159,7 @@ enum Piece {
     PIECE_NB = 16
 };
 
+// Check if a piece is valid
 constexpr bool isValidPiece(Piece p) {
     switch(p) {
         case W_PAWN: case W_KNIGHT: case W_BISHOP: case W_ROOK: case W_QUEEN: case W_KING:
@@ -212,10 +225,6 @@ enum Move : uint16_t {
     MOVE_NULL = 65
 };
 
-constexpr bool isValidMove(Move m) {
-    return (m != MOVE_NONE) && (m != MOVE_NULL);
-}
-
 
 // Get move information
 constexpr Square moveTo(Move m)       { return Square(m & 0x3F); }
@@ -224,6 +233,18 @@ constexpr uint16_t moveFromTo(Move m) { return m & 0xFFF; }
 constexpr MoveType moveTypeOf(Move m) { return MoveType(m & (3 << 14)); }
 constexpr PieceType movePromotionType(Move m) { return PieceType(((m >> 12) & 3) + KNIGHT); }
 
+
+constexpr bool isNotNullMove(Move m) {
+    return (m != MOVE_NONE) && (m != MOVE_NULL);
+}
+
+
+constexpr bool isValidMove(Move m) {
+    return isNotNullMove(m) 
+        && isValidSq(moveTo(m)) 
+        && isValidSq(moveFrom(m))
+        && (moveTypeOf(m) == MT_PROMOTION ? isValidPieceType(movePromotionType(m)) : true);
+}
 
 // Creates a move based on the from and to squares (standard moves)
 constexpr Move makeMove(Square from, Square to) { return Move((from << 6) + to); }

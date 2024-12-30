@@ -37,31 +37,33 @@ void MovePicker<Me>::score() {
 
         // Knights
         enemies = pos.getPiecesBB(Opp, KNIGHT);
-        bitloop(enemies) {
-            enemyMinorThreats |= attacks<KNIGHT>(bitscan(enemies));
-        }
+        loopOverBits(enemies, [&](Square s) {
+            enemyMinorThreats |= attacks<KNIGHT>(s);
+        });
 
         // Bishops
         enemies = pos.getPiecesBB(Opp, BISHOP);
-        bitloop(enemies) {
-            enemyMinorThreats |= attacks<BISHOP>(bitscan(enemies), occ);
-        }
+        loopOverBits(enemies, [&](Square s) {
+            enemyMinorThreats |= attacks<BISHOP>(s, occ);
+        });
 
         // Rooks can threaten the same pieces that pawns and minors can
         enemyRookThreats = enemyMinorThreats;
 
         // Rooks
         enemies = pos.getPiecesBB(Opp, ROOK);
-        bitloop(enemies) {
-            enemyRookThreats |= attacks<ROOK>(bitscan(enemies), occ);
-        }
+        loopOverBits(enemies, [&](Square s) {
+            enemyRookThreats |= attacks<ROOK>(s, occ);
+        });
 
         allThreatenedPieces = (pos.getPiecesBB(Me, KNIGHT, BISHOP) & enemyPawnThreats)
                             | (pos.getPiecesBB(Me, ROOK)  & enemyMinorThreats)
                             | (pos.getPiecesBB(Me, QUEEN) & enemyRookThreats);
     }
 
-    for (ScoredMove& sm : movelist) {
+    for (ScoredMove& sm : *this) {
+        assert(isValidMove(sm.move));
+
         // Quiet moves
         if constexpr (MgType == Movegen::MG_TYPE_QUIET) {
             const Square from  = moveFrom(sm.move);
@@ -134,26 +136,20 @@ template void MovePicker<BLACK>::score<Movegen::MG_TYPE_QUIET>();
 template void MovePicker<BLACK>::score<Movegen::MG_TYPE_EVASIONS>();
 
 
+// Returns the next move that satisfies the filter.
 template<Color Me>
-template<MovePickType MpType, typename Pred>
+template<typename Pred>
 ScoredMove MovePicker<Me>::select(Pred filter) {
-    while (current < endMoves) {
-        if constexpr (MpType == MP_TYPE_BEST) {
-            std::swap(*current, *std::max_element(current, endMoves));
-        }
-
+    for (; current < endMoves; ++current) {
         if (current->move != ttMove && filter()) {
             return *current++;
         }
-
-        current++;
     }
 
     return ScoredMove(MOVE_NONE, 0);
 }
 
 
-// TODO: Move skipQuiet to template?
 template<Color Me>
 Move MovePicker<Me>::nextMove(bool skipQuiet) {
 
@@ -185,7 +181,7 @@ top:
         case MovePickStage::MP_STAGE_CAPTURE_GOOD:
 
             // Return next move if it isn't in the TT
-            if (MovePicker<Me>::select<MovePickType::MP_TYPE_NEXT>([&]() {
+            if (MovePicker<Me>::select([&]() {
                 // See if we win the current capture if we make all trades
                 // If we don't, move the capture to endBadCaptures
                 return pos.see(current->move, -current->score / Tunables::MOVEPICKER_LOSING_CAP_THRESHOLD)
@@ -201,7 +197,7 @@ top:
         // Generate the quiet moves
         case MovePickStage::MP_STAGE_QUIET_GENERATE:
             if (!skipQuiet) {
-                current = endBadCaptures;
+                current  = endBadCaptures;
                 endMoves = beginBadQuiets = endBadQuiets = Movegen::enumerateLegalMovesToList<Me, Movegen::MG_TYPE_QUIET>(pos, current);
 
                 MovePicker<Me>::score<Movegen::MG_TYPE_QUIET>();
@@ -213,7 +209,7 @@ top:
         // Find good quiet moves
         case MovePickStage::MP_STAGE_QUIET_GOOD:
             // Return next move if it isn't in the TT
-            if (!skipQuiet && MovePicker<Me>::select<MP_TYPE_NEXT>([]() { return true; })) {
+            if (!skipQuiet && MovePicker<Me>::select([]() { return true; })) {
 
                 // Check to see if we still have good quiet moves
                 if (
@@ -227,7 +223,7 @@ top:
                 beginBadQuiets = current - 1;
             }
 
-        current = movelist;
+        current  = movelist;
         endMoves = endBadCaptures;
         ++mpStage;
         [[fallthrough]];
@@ -235,10 +231,11 @@ top:
         // Find bad capture moves
         case MovePickStage::MP_STAGE_CAPTURE_BAD:
             // Return next move if it isn't in the TT
-            if (MovePicker<Me>::select<MP_TYPE_NEXT>([]() { return true; })) {
+            if (MovePicker<Me>::select([]() { return true; })) {
                 return (current - 1)->move;
             }
 
+            // Move to the bad quiets
             current = beginBadQuiets;
             endMoves = endBadQuiets;
 
@@ -249,7 +246,7 @@ top:
         case MovePickStage::MP_STAGE_QUIET_BAD:
             if (!skipQuiet) {
                 // Return next move if it isn't in the TT
-                return MovePicker<Me>::select<MP_TYPE_NEXT>([]() { return true; }).move;
+                return MovePicker<Me>::select([]() { return true; }).move;
             }
 
             // If we aren't in evasions or qsearch, the search ends here:
@@ -262,16 +259,14 @@ top:
             endMoves = Movegen::enumerateLegalMovesToList<Me, Movegen::MG_TYPE_EVASIONS>(pos, current);
 
             MovePicker<Me>::score<Movegen::MG_TYPE_EVASIONS>();
+            kSort(current, endMoves, std::numeric_limits<int>::min());
             ++mpStage;
             [[fallthrough]];
 
         case MovePickStage::MP_STAGE_EVASION_GOOD:
-            // Return next move if it isn't in the TT (ordered)
-            return MovePicker<Me>::select<MP_TYPE_BEST>([]() { return true; }).move;
-
         case MovePickStage::MP_STAGE_QSEARCH_CAP_GOOD:
             // Return next move if it isn't in the TT
-            return MovePicker<Me>::select<MP_TYPE_NEXT>([]() { return true; }).move;
+            return MovePicker<Me>::select([]() { return true; }).move;
     }
 
     // Should never reach this point.

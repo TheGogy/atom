@@ -186,6 +186,10 @@ public:
 
     // Check to see if a piece can see another piece
     inline bool pieceSees(const PieceType pt, const Square seer, const Bitboard victim, const Bitboard occ) const {
+        assert(isValidPieceType(pt));
+        assert(isValidSq(seer));
+        assert(hasOneBit(victim));
+
         switch (pt) {
             case PAWN:
                 return (sideToMove == WHITE ? pawnAttacks<WHITE>(seer) : pawnAttacks<BLACK>(seer)) & victim;

@@ -17,7 +17,7 @@ int main (int argc, char *argv[]) {
     initEverything();
 
     std::cout << "Atom v" << ENGINE_VERSION;
-#ifdef RELEASE
+#ifdef NDEBUG
     std::cout << " (release)";
 #elif defined(DEBUG)
     std::cout << " (debug)";

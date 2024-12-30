@@ -897,7 +897,7 @@ Value SearchWorker::qSearch(
                                   &thisThread->pawnHist
                                   );
 
-    Square prevSquare = (isValidMove((sPtr - 1)->currentMove)) ? (moveTo((sPtr - 1)->currentMove)) : SQ_NONE;
+    Square prevSquare = (isNotNullMove((sPtr - 1)->currentMove)) ? (moveTo((sPtr - 1)->currentMove)) : SQ_NONE;
 
     bool givesCheck, isTactical;
 

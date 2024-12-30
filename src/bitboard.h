@@ -9,8 +9,6 @@
 namespace Atom {
 
 // Bitboard utilities
-#define bitloop(bb) for(; bb; bb &= bb - 1)
-
 inline bool getBit(Bitboard bb, Square s) {
     return bb & sqToBB(s);
 }
@@ -29,6 +27,26 @@ inline Bitboard lsbBitboard(Bitboard bb) {
 
 inline uint64_t pext(uint64_t bb, uint64_t mask) {
     return _pext_u64(bb, mask);
+}
+
+
+template<typename F>
+constexpr void loopOverBits(Bitboard bb, F f) {
+    Square s;
+    for(; bb; bb &= bb - 1) {
+        s = bitscan(bb);
+        f(s);
+    }
+}
+
+template<typename F>
+constexpr bool loopOverBitsUntil(Bitboard bb, F f) {
+    Square s;
+    for(; bb; bb &= bb - 1) {
+        s = bitscan(bb);
+        if (!f(s)) return false;
+    }
+    return true;
 }
 
 

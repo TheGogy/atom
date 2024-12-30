@@ -39,10 +39,9 @@ template<Color Perspective>
 void HalfKAv2_hm::append_active_indices(const Position& pos, IndexList& active) {
     Square   ksq = pos.getKingSquare(Perspective);
     Bitboard bb  = pos.getPiecesBB();
-    bitloop (bb) {
-      Square s = bitscan(bb);
-      active.push_back(make_index<Perspective>(s, pos.getPieceAt(s), ksq));
-    }
+    loopOverBits(bb, [&](Square s) {
+        active.push_back(make_index<Perspective>(s, pos.getPieceAt(s), ksq));
+    });
 }
 
 // Explicit template instantiations

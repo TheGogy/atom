@@ -92,16 +92,12 @@ inline bool enumeratePawnPromotionMoves(const Position &pos, Bitboard source, co
                 capRPromotions &= checkMask;
             }
 
-            bitloop(capLPromotions) {
-                Square to = bitscan(capLPromotions);
-                Square from = to - UpLeft;
-                ENUMERATE_MOVES(enumeratePromotions<Me, MgType>(from, to, handler));
-            }
-            bitloop(capRPromotions) {
-                Square to = bitscan(capRPromotions);
-                Square from = to - UpRight;
-                ENUMERATE_MOVES(enumeratePromotions<Me, MgType>(from, to, handler));
-            }
+            ENUMERATE_MOVES(loopOverBitsUntil(capLPromotions, [&](Square to) {
+                return enumeratePromotions<Me, MgType>(to - UpLeft, to, handler);
+            }));
+            ENUMERATE_MOVES(loopOverBitsUntil(capRPromotions, [&](Square to) {
+                return enumeratePromotions<Me, MgType>(to - UpRight, to, handler);
+            }));
         }
 
         // Quiet Promotion
@@ -113,11 +109,9 @@ inline bool enumeratePawnPromotionMoves(const Position &pos, Bitboard source, co
 
             if constexpr (InCheck) quietPromotions &= checkMask;
 
-            bitloop(quietPromotions) {
-                Square to = bitscan(quietPromotions);
-                Square from = to - Up;
-                ENUMERATE_MOVES(enumeratePromotions<Me, MgType>(from, to, handler));
-            }
+            ENUMERATE_MOVES(loopOverBitsUntil(quietPromotions, [&](Square to) {
+                return enumeratePromotions<Me, MgType>(to - Up, to, handler);
+            }));
         }
     }
 
@@ -132,10 +126,11 @@ inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, co
     constexpr Direction pawnDir = pawnDirection(Me);
     constexpr Bitboard epRank = (Me == WHITE ? RANK_5_BB : RANK_4_BB);
 
+    const Bitboard pinOrtho  = pos.pinOrtho();
+    const Bitboard pinDiag   = pos.pinDiag();
+    const Bitboard checkMask = pos.checkMask();
+
     if (pos.getEpSquare() != SQ_NONE) {
-        const Bitboard pinOrtho  = pos.pinOrtho();
-        const Bitboard pinDiag   = pos.pinDiag();
-        const Bitboard checkMask = pos.checkMask();
 
         // The piece that we will capture through en passant
         const Bitboard epcaptured = sqToBB(pos.getEpSquare() - pawnDir);
@@ -151,15 +146,14 @@ inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, co
             }
         }
 
-        bitloop(enpassants) {
-            const Square from = bitscan(enpassants);
+        ENUMERATE_MOVES(loopOverBitsUntil(enpassants, [&](Square from) {
 
             // If our pawn is diagonally pinned and the en passant square is not part of the pinmask,
             // then we cannot take
             // https://lichess.org/editor/5b2/5k2/8/2Pp4/1K6/8/8/8_w_-_-_0_1?color=white
             // https://lichess.org/editor/5b2/5k2/8/1pP5/1K6/8/8/8_w_-_-_0_1?color=white
             if ((sqToBB(from) & pinDiag) && !(sqToBB(pos.getEpSquare()) & pinDiag))
-                continue;
+                return true;
 
             // If our king is on the same rank as one of the opponent's sliders, and if by removing our pawn and the opponent's pawn,
             // then we would be in check, then we cannot take en passant. Otherwise, add capture.
@@ -170,7 +164,8 @@ inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, co
                 Square to = pos.getEpSquare();
                 HANDLE_MOVE(makeMove<MT_EN_PASSANT>(from, to));
             }
-        }
+            return true;
+        }));
     }
 
     return true;
@@ -182,8 +177,8 @@ inline bool enumeratePawnEnpassantMoves(const Position &pos, Bitboard source, co
 template<Color Me, bool InCheck, MoveGenType MgType = MG_TYPE_ALL, typename Handler>
 inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const Handler& handler) {
     constexpr Color Opp = ~Me;
-    constexpr Bitboard Rank3    = (Me == WHITE) ? RANK_3_BB : RANK_6_BB;
-    constexpr Bitboard Rank7    = (Me == WHITE) ? RANK_7_BB : RANK_2_BB;
+    constexpr Bitboard Rank3 = (Me == WHITE) ? RANK_3_BB : RANK_6_BB;
+    constexpr Bitboard Rank7 = (Me == WHITE) ? RANK_7_BB : RANK_2_BB;
     constexpr Direction Up      = (Me == WHITE) ? NORTH : SOUTH;
     constexpr Direction UpLeft  = (Me == WHITE) ? NORTH_WEST : SOUTH_EAST;
     constexpr Direction UpRight = (Me == WHITE) ? NORTH_EAST : SOUTH_WEST;
@@ -206,17 +201,15 @@ inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const
             doublePushes &= checkMask;
         }
 
-        bitloop(singlePushes) {
-            Square to = bitscan(singlePushes);
-            Square from = to - Up;
-            HANDLE_MOVE(makeMove(from, to));
-        }
+        ENUMERATE_MOVES(loopOverBitsUntil(singlePushes, [&](Square to) {
+            HANDLE_MOVE(makeMove(to - Up, to));
+            return true;
+        }));
 
-        bitloop(doublePushes) {
-            Square to = bitscan(doublePushes);
-            Square from = to - Up - Up;
-            HANDLE_MOVE(makeMove(from, to));
-        }
+        ENUMERATE_MOVES(loopOverBitsUntil(doublePushes, [&](Square to) {
+            HANDLE_MOVE(makeMove(to - Up - Up, to));
+            return true;
+        }));
     }
 
     // Normal Capture
@@ -232,16 +225,15 @@ inline bool enumeratePawnNormalMoves(const Position &pos, Bitboard source, const
             capRight &= checkMask;
         }
 
-        bitloop(capLeft) {
-            Square to = bitscan(capLeft);
-            Square from = to - UpLeft;
-            HANDLE_MOVE(makeMove(from, to));
-        }
-        bitloop(capRight) {
-            Square to = bitscan(capRight);
-            Square from = to - UpRight;
-            HANDLE_MOVE(makeMove(from, to));
-        }
+        ENUMERATE_MOVES(loopOverBitsUntil(capLeft, [&](Square to) {
+            HANDLE_MOVE(makeMove(to - UpLeft, to));
+            return true;
+        }));
+
+        ENUMERATE_MOVES(loopOverBitsUntil(capRight, [&](Square to) {
+            HANDLE_MOVE(makeMove(to - UpRight, to));
+            return true;
+        }));
     }
 
     return true;
@@ -295,10 +287,10 @@ inline bool enumerateKingMoves(const Position &pos, Square from, const Handler& 
     if constexpr (MgType == MG_TYPE_QUIET)    dest &= ~pos.getPiecesBB(~Me);
     if constexpr (MgType == MG_TYPE_TACTICAL) dest &=  pos.getPiecesBB(~Me);
 
-    bitloop(dest) {
-        Square to = bitscan(dest);
+    ENUMERATE_MOVES(loopOverBitsUntil(dest, [&](Square to) {
         HANDLE_MOVE(makeMove(from, to));
-    }
+        return true;
+    }));
 
     return true;
 }
@@ -314,19 +306,19 @@ inline bool enumerateKnightMoves(const Position &pos, Bitboard source, const Han
     // https://lichess.org/editor/5k2/2r5/8/8/8/2N5/2K5/8_w_-_-_0_1?color=white
     Bitboard knights = source & ~(pos.pinDiag() | pos.pinOrtho());
 
-    bitloop(knights) {
-        const Square from = bitscan(knights);
+    ENUMERATE_MOVES(loopOverBitsUntil(knights, [&](Square from) {
         Bitboard dest = attacks<KNIGHT>(from) & ~pos.getPiecesBB(Me);
 
         if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) dest &= pos.checkMask();
         if constexpr (MgType == MG_TYPE_TACTICAL)            dest &= pos.getPiecesBB(~Me);
         if constexpr (MgType == MG_TYPE_QUIET)               dest &= ~pos.getPiecesBB(~Me);
 
-        bitloop(dest) {
-            Square to = bitscan(dest);
+        ENUMERATE_MOVES(loopOverBitsUntil(dest, [&](Square to) {
             HANDLE_MOVE(makeMove(from, to));
-        }
-    }
+            return true;
+        }));
+        return true;
+    }));
 
     return true;
 }
@@ -346,24 +338,23 @@ inline bool enumerateDiagSliderMoves(const Position &pos, Bitboard source, const
 
     // Non-pinned bishop + queen
     pieces = bqCanMove & ~pos.pinDiag();
-    bitloop(pieces) {
-        Square from = bitscan(pieces);
+    ENUMERATE_MOVES(loopOverBitsUntil(pieces, [&](Square from) {
         Bitboard dest = attacks<BISHOP>(from, pos.getPiecesBB()) & ~pos.getPiecesBB(Me);
 
         if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) dest &= pos.checkMask();
         if constexpr (MgType == MG_TYPE_TACTICAL)            dest &=  oppPiecesBB;
         if constexpr (MgType == MG_TYPE_QUIET)               dest &= ~oppPiecesBB;
 
-        bitloop(dest) {
-            Square to = bitscan(dest);
+        ENUMERATE_MOVES(loopOverBitsUntil(dest, [&](Square to) {
             HANDLE_MOVE(makeMove(from, to));
-        }
-    }
+            return true;
+        }));
+        return true;
+    }));
 
     // Pinned bishop + queen
     pieces = bqCanMove & pos.pinDiag();
-    bitloop(pieces) {
-        Square from = bitscan(pieces);
+    ENUMERATE_MOVES(loopOverBitsUntil(pieces, [&](Square from) {
 
         // Diagonally pinned bishops + queens can move, but only within the pinmask.
         // https://lichess.org/editor/8/4k1b1/8/4B3/8/2K5/8/8_w_-_-_0_1?color=white
@@ -373,11 +364,12 @@ inline bool enumerateDiagSliderMoves(const Position &pos, Bitboard source, const
         if constexpr (MgType == MG_TYPE_TACTICAL)            dest &=  oppPiecesBB;
         if constexpr (MgType == MG_TYPE_QUIET)               dest &= ~oppPiecesBB;
 
-        bitloop(dest) {
-            Square to = bitscan(dest);
+        ENUMERATE_MOVES(loopOverBitsUntil(dest, [&](Square to) {
             HANDLE_MOVE(makeMove(from, to));
-        }
-    }
+            return true;
+        }));
+        return true;
+    }));
 
     return true;
 }
@@ -397,24 +389,23 @@ inline bool enumerateOrthoSliderMoves(const Position &pos, Bitboard source, cons
 
     // Non-pinned rook + queen
     pieces = bqCanMove & ~pos.pinOrtho();
-    bitloop(pieces) {
-        Square from = bitscan(pieces);
+    ENUMERATE_MOVES(loopOverBitsUntil(pieces, [&](Square from) {
         Bitboard dest = attacks<ROOK>(from, pos.getPiecesBB()) & ~pos.getPiecesBB(Me);
 
         if constexpr (InCheck || MgType == MG_TYPE_EVASIONS) dest &= pos.checkMask();
         if constexpr (MgType == MG_TYPE_TACTICAL)            dest &=  oppPiecesBB;
         if constexpr (MgType == MG_TYPE_QUIET)               dest &= ~oppPiecesBB;
 
-        bitloop(dest) {
-            Square to = bitscan(dest);
+        ENUMERATE_MOVES(loopOverBitsUntil(dest, [&](Square to) {
             HANDLE_MOVE(makeMove(from, to));
-        }
-    }
+            return true;
+        }));
+        return true;
+    }));
 
     // Pinned rook + queen
     pieces = bqCanMove & pos.pinOrtho();
-    bitloop(pieces) {
-        Square from = bitscan(pieces);
+    ENUMERATE_MOVES(loopOverBitsUntil(pieces, [&](Square from) {
         // Orthogonally pinned rooks + queens can move, but only within the pinmask.
         // https://lichess.org/editor/8/4k3/8/2K1R1r1/8/8/8/8_w_-_-_0_1?color=white
         Bitboard dest = attacks<ROOK>(from, pos.getPiecesBB()) & ~pos.getPiecesBB(Me) & pos.pinOrtho();
@@ -423,11 +414,12 @@ inline bool enumerateOrthoSliderMoves(const Position &pos, Bitboard source, cons
         if constexpr (MgType == MG_TYPE_TACTICAL)            dest &=  oppPiecesBB;
         if constexpr (MgType == MG_TYPE_QUIET)               dest &= ~oppPiecesBB;
 
-        bitloop(dest) {
-            Square to = bitscan(dest);
+        ENUMERATE_MOVES(loopOverBitsUntil(dest, [&](Square to) {
             HANDLE_MOVE(makeMove(from, to));
-        }
-    }
+            return true;
+        }));
+        return true;
+    }));
 
     return true;
 }
