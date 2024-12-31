@@ -22,7 +22,6 @@ public:
 
     // Helper functions
     static Square parseSquare(std::string str);
-    static Move parseMove(std::string str);
     static std::string formatSquare(Square sq);
     static std::string formatMove(Move m);
     static std::string formatScore(const Value& score, const Position& pos);

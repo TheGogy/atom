@@ -32,10 +32,10 @@ void SearchWorker::clear() {
         for (Movepicker::StatsType c : {Movepicker::NoCaptures, Movepicker::Captures})
             for (auto& to : continuationHist[inCheck][c])
                 for (auto& h : to)
-                    h->fill(-58);
+                    h->fill(-427);
 
-    butterflyHist.fill(0);
-    captureHist.fill(-700);
+    butterflyHist.fill(61);
+    captureHist.fill(-598);
     pawnHist.fill(-1188);
     correctionHist.fill(0);
 

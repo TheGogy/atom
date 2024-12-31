@@ -62,7 +62,7 @@ constexpr int SEE_PRUNING_MAX_DEPTH = 10;
 constexpr int SEE_PRUNING_CAP_SCORE = 180;
 constexpr int SEE_PRUNING_CHK_SCORE = 70;
 
-constexpr double REDUCTION_AMOUNT = 18.62;
+constexpr double REDUCTION_AMOUNT = 19.43;
 constexpr int REDUCTION_BASE = 1274;
 constexpr int REDUCTION_DELTA_SCALE = 746;
 constexpr int REDUCTION_NORMALISER = 1024;

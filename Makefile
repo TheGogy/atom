@@ -32,7 +32,14 @@ CXXFLAGS := $($(CPUFLAGS))
 LDFLAGS := $($(CPUFLAGS))
 
 DEBUG_CXXFLAGS := $(CXXFLAGS) -g -O0 -DDEBUG
-RELEASE_CXXFLAGS := $(CXXFLAGS) -O3 -funroll-loops -finline -fomit-frame-pointer -flto -flto-partition=one -DNDEBUG -mtune=native
+RELEASE_CXXFLAGS := $(CXXFLAGS) -O3 -DNDEBUG -funroll-loops -finline -fomit-frame-pointer \
+    -flto=$(shell nproc) -flto-partition=one -mtune=native -march=native \
+    -fno-asynchronous-unwind-tables -fno-exceptions -fno-rtti \
+    -fira-loop-pressure -fira-hoist-pressure -ftree-vectorize \
+    -ffast-math -funsafe-math-optimizations -fno-trapping-math \
+    -ffinite-math-only -fno-signaling-nans -fcx-limited-range \
+    -fno-stack-protector
+
 PROFILE_CXXFLAGS := $(CXXFLAGS) $(RELEASE_CXXFLAGS) -g
 
 DEBUG_LDFLAGS := $(LDFLAGS)

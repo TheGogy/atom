@@ -281,7 +281,7 @@ void Uci::cmdUci() {
     std::cout << "id name Atom " << ENGINE_VERSION << std::endl;
     std::cout << "id author George Rawlinson and Tomáš Pecher" << std::endl;
     std::cout << std::endl;
-    std::cout << "option name Threads type spin default 1 min 1 max 16" << EvalFileDefaultNameBig << std::endl;
+    std::cout << "option name Threads type spin default 1 min 1 max 16" << std::endl;
     std::cout << "option name EvalFile type string default <inbuilt> " << EvalFileDefaultNameBig << std::endl;
     std::cout << "option name EvalFileSmall type string default <inbuilt> " << EvalFileDefaultNameSmall << std::endl;
     std::cout << "option name Hash type spin default 16 min 1 max 4096" << std::endl;
@@ -342,9 +342,6 @@ void Uci::cmdSetOption(std::istringstream& is) {
     // | ClearHash     | (button)  Clears the hash             |               |
     // | Threads       | (spin)    Number of threads to use    | 1             |
     // +---------------+---------------------------------------+---------------+
-
-    // INFO: The logic here may need to be reworked should we decide to add any options
-    // that contain spaces in the name.
 
     // Do not change the options mid search
     engine.waitForSearchFinish();
