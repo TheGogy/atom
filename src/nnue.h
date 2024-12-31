@@ -12,7 +12,7 @@ namespace Atom {
 // Edit these names here when using new NNUEs.
 // Ensure that they are correct with the NNUE path from the
 // directory that you are building from.
-#define EvalFileDefaultNameBig   "nn-1111cefa1111.nnue"
+#define EvalFileDefaultNameBig   "nn-1c0000000000.nnue"
 #define EvalFileDefaultNameSmall "nn-37f18f62d772.nnue"
 
 namespace NNUE {

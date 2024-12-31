@@ -82,7 +82,7 @@ Value evaluate(
     nnueEval -= nnueEval * complexity / (smallNet ? Tunables::NNUE_COMPLEXITY_SMALL : Tunables::NNUE_COMPLEXITY_BIG);
 
     // Update optimism
-    optimism += optimism * complexity / (smallNet ? Tunables::OPTIMISM_SMALLNET_DAMPING : Tunables::OPTIMISM_BIGNET_DAMPING);
+    optimism += optimism * complexity / Tunables::OPTIMISM_DAMPING;
 
     // Get the total material on the board. This is used to scale the evaluation properly.
     Value material = totalMaterial(pos, smallNet);
@@ -91,7 +91,10 @@ Value evaluate(
     Value finalEval = (
         nnueEval * (material + Tunables::NNUE_BASE_EVAL)
       + optimism * (material + Tunables::OPTIMISM_BASE_EVAL)
-    ) / (smallNet ? Tunables::EVALUATION_NORMALIZER_SMALLNET : Tunables::EVALUATION_NORMALIZER_BIGNET);
+    ) / Tunables::EVALUATION_NORMALIZER;
+
+    // Damp evaluation when just shuffling pieces around
+    finalEval -= finalEval * pos.getHalfMoveClock() / Tunables::RULE50_DAMPING;
 
     // Make sure we do not hit tablebase eval range
     return std::clamp(finalEval, VALUE_TB_LOSS_IN_MAX_PLY + 1, VALUE_TB_WIN_IN_MAX_PLY - 1);

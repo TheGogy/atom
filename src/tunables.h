@@ -82,17 +82,17 @@ constexpr int NNUE_SMALL_NET_THRESHOLD = 962;
 constexpr int NNUE_PSQT_WEIGHT = 125;
 constexpr int NNUE_POSITIONAL_WEIGHT = 131;
 
-constexpr int NNUE_BASE_EVAL = 73921;
-constexpr int OPTIMISM_BASE_EVAL = 8112;
+constexpr int NNUE_BASE_EVAL = 77777;
+constexpr int OPTIMISM_BASE_EVAL = 7777;
 
-constexpr int OPTIMISM_SMALLNET_DAMPING = 433;
-constexpr int OPTIMISM_BIGNET_DAMPING = 453;
+constexpr int OPTIMISM_DAMPING = 468;
 
 constexpr int OPTIMISM_RATIO_NUMERATOR = 125;
 constexpr int OPTIMISM_RATIO_DENOMINATOR = 89;
 
-constexpr int EVALUATION_NORMALIZER_SMALLNET = 68104;
-constexpr int EVALUATION_NORMALIZER_BIGNET   = 74715;
+constexpr int EVALUATION_NORMALIZER = 77777;
+
+constexpr int RULE50_DAMPING = 212;
 
 constexpr int REDUCTION_HIGH_THRESHOLD = 5;
 
@@ -124,8 +124,8 @@ constexpr int FUTILITY_SEE_PRUNING_MULTIPLIER = 4;
 
 constexpr int NNUE_RE_EVALUATE_THRESHOLD = 227;
 
-constexpr int NNUE_COMPLEXITY_SMALL = 18815;
-constexpr int NNUE_COMPLEXITY_BIG   = 17864;
+constexpr int NNUE_COMPLEXITY_SMALL = 20233;
+constexpr int NNUE_COMPLEXITY_BIG   = 17879;
 
 constexpr int PAWN_VALUE_SMALLNET = 553;
 constexpr int PAWN_VALUE_BIGNET   = 532;
