@@ -3,6 +3,7 @@
 #include "bitboard.h"
 #include "uci.h"
 #include "zobrist.h"
+#include "tunables.h"
 
 using namespace Atom;
 
@@ -14,6 +15,14 @@ void initEverything() {
 }
 
 int main (int argc, char *argv[]) {
+    // Print tunables
+#ifdef ENABLE_TUNING
+    if (argc > 1 && std::string(argv[1]) == "tunables") {
+        Tunables::outputTunablesJson();
+        return EXIT_SUCCESS;
+    }
+#endif
+
     initEverything();
 
     std::cout << "Atom v" << ENGINE_VERSION;
@@ -21,6 +30,8 @@ int main (int argc, char *argv[]) {
     std::cout << " (release)";
 #elif defined(DEBUG)
     std::cout << " (debug)";
+#elif defined(ENABLE_TUNING)
+    std::cout << " (tuning)";
 #endif
     std::cout << " built " << __DATE__ << " " << __TIME__ << std::endl;
 

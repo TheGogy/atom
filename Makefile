@@ -46,9 +46,13 @@ DEBUG_LDFLAGS := $(LDFLAGS)
 RELEASE_LDFLAGS := $(LDFLAGS) -s -static -flto -flto-partition=one -flto=jobserver
 PROFILE_LDFLAGS := $(LDFLAGS) -g -static -flto -flto-partition=one -flto=jobserver
 
-.PHONY: all nnue debug release profile clean
+.PHONY: all nnue debug release profile clean tune
 
 all: nnue release
+
+tune: CXXFLAGS := $(RELEASE_CXXFLAGS) -DENABLE_TUNING
+tune: LDFLAGS := $(RELEASE_LDFLAGS)
+tune: $(TARGET_EXEC)
 
 nnue:
 	./scripts/nnue.sh

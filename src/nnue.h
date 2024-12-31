@@ -1,5 +1,4 @@
-#ifndef NNUE_H
-#define NNUE_H
+#pragma once
 
 // From stockfish. For more info, see nnue/README.md
 
@@ -28,5 +27,3 @@ inline bool useSmallNet(const Position &pos) {
 } // namespace NNUE
 
 } // namespace Atom
-
-#endif // NNUE_H

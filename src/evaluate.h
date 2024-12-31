@@ -1,5 +1,4 @@
-#ifndef EVALUATE_H
-#define EVALUATE_H
+#pragma once
 
 #include <algorithm>
 
@@ -104,5 +103,3 @@ Value evaluate(
 } // namespace Eval
 
 } // namespace Atom
-
-#endif // EVALUATE_H

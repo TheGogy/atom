@@ -1,5 +1,4 @@
-#ifndef TT_H
-#define TT_H
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -160,5 +159,3 @@ private:
 
 
 } //namespace Atom
-
-#endif // TT_H

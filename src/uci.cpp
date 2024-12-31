@@ -1,10 +1,10 @@
-
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <iomanip>
 
 #include "uci.h"
 #include "movegen.h"
@@ -286,6 +286,21 @@ void Uci::cmdUci() {
     std::cout << "option name EvalFileSmall type string default <inbuilt> " << EvalFileDefaultNameSmall << std::endl;
     std::cout << "option name Hash type spin default 16 min 1 max 4096" << std::endl;
     std::cout << "option name Clear Hash type button" << std::endl;
+
+#ifdef ENABLE_TUNING
+    // Add all integer tunable parameters
+    for (const auto& param : Tunables::TUNABLE_PARAMS) {
+        std::cout << "option name " << param.name << " type string"
+                 << " default " << param.default_value << std::endl;
+    }
+
+    // Add all float tunable parameters
+    for (const auto& param : Tunables::TUNABLE_FLOAT_PARAMS) {
+        std::cout << "option name " << param.name << " type string"
+                 << " default " << param.default_value << std::endl;
+    }
+#endif
+
     std::cout << "uciok" << std::endl;
 }
 
@@ -333,17 +348,6 @@ void Uci::cmdPosition(std::istringstream& is) {
 
 
 void Uci::cmdSetOption(std::istringstream& is) {
-    // +---------------+---------------------------------------+---------------+
-    // |  Option       |                Value                  |    Default    |
-    // +---------------+---------------------------------------+---------------+
-    // | EvalFile      | (string)  Path to the big NNUE file   | <inbuilt>     |
-    // | EvalFileSmall | (string)  Path to the small NNUE file | <inbuilt>     |
-    // | Hash          | (spin)    Hash size, in MB            | 16            |
-    // | ClearHash     | (button)  Clears the hash             |               |
-    // | Threads       | (spin)    Number of threads to use    | 1             |
-    // +---------------+---------------------------------------+---------------+
-
-    // Do not change the options mid search
     engine.waitForSearchFinish();
 
     std::string token, optName, value;
@@ -366,14 +370,39 @@ void Uci::cmdSetOption(std::istringstream& is) {
             engine.setHashSize(std::stoi(token));
         } else if (optName == "Threads") {
             engine.setNbThreads(std::stoi(token));
-        } else {
-            std::cout << "Error: Unknown option name." << std::endl;
         }
+#ifdef ENABLE_TUNING
+        else {
+            // Try to find and set integer parameter
+            bool found = false;
+            for (const auto& param : Tunables::TUNABLE_PARAMS) {
+                if (optName == param.name) {
+                    *param.value = std::stoi(token);
+                    found = true;
+                    break;
+                }
+            }
+            
+            // If not found, try float parameters
+            if (!found) {
+                for (const auto& param : Tunables::TUNABLE_FLOAT_PARAMS) {
+                    if (optName == param.name) {
+                        *param.value = std::stof(token);
+                        found = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!found) {
+                std::cout << "Error: Unknown option name." << std::endl;
+            }
+        }
+#endif
         return;
     } else if (value == "ClearHash") {
         engine.clear();
     }
-
 }
 
 Search::SearchLimits Uci::parseGoLimits(std::istringstream& is) {

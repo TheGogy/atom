@@ -1,5 +1,4 @@
-#ifndef THREAD_H
-#define THREAD_H
+#pragma once
 
 #include <atomic>
 #include <condition_variable>
@@ -118,5 +117,3 @@ private:
 };
 
 } // namespace Atom
-
-#endif // THREAD_H

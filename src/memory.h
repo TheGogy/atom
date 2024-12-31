@@ -1,5 +1,4 @@
-#ifndef MEMORY_H
-#define MEMORY_H
+#pragma once
 
 #include "types.h"
 #include <cassert>
@@ -168,5 +167,3 @@ std::enable_if_t<std::is_array_v<T>, AlignedPtr<T>> make_unique_aligned(size_t n
 }
 
 } // namespace Atom
-
-#endif // MEMORY_H

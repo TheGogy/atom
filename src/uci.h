@@ -1,5 +1,4 @@
-#ifndef UCI_H
-#define UCI_H
+#pragma once
 
 #include <sstream>
 #include <string>
@@ -57,4 +56,3 @@ private:
 
 } // namespace Atom
 
-#endif

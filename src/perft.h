@@ -1,6 +1,4 @@
-
-#ifndef PERFT_H
-#define PERFT_H
+#pragma once
 
 #include "position.h"
 
@@ -13,5 +11,3 @@ void perft(Position &pos, int depth);
 void testFromFile(const std::string &filename);
 
 } // namespace Atom
-
-#endif // !PERFT_H

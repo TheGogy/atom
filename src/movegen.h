@@ -1,5 +1,4 @@
-#ifndef MOVEGEN_H
-#define MOVEGEN_H
+#pragma once
 
 #include "bitboard.h"
 #include "types.h"
@@ -542,5 +541,3 @@ inline ScoredMove* enumerateChecksToList(const Position &pos, ScoredMove* moveli
 } // namespace Movegen
 
 } // namespace Atom
-
-#endif

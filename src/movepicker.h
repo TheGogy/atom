@@ -1,5 +1,4 @@
-#ifndef MOVEPICKER_H
-#define MOVEPICKER_H
+#pragma once
 
 #include <cstdint>
 
@@ -207,5 +206,3 @@ private:
 } // namespace Movepicker
 
 } // namespace Atom
-
-#endif // MOVEPICKER_H

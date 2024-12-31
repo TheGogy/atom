@@ -1,5 +1,4 @@
-#ifndef ENGINE_H
-#define ENGINE_H
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -65,5 +64,3 @@ private:
 };
 
 } // namespace Atom
-
-#endif // ENGINE_H

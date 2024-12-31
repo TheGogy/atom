@@ -1,5 +1,4 @@
-#ifndef SEARCH_H
-#define SEARCH_H
+#pragma once
 
 #include <atomic>
 #include <chrono>
@@ -250,7 +249,7 @@ private:
 
     inline int statBonus(Depth depth) {
         return std::min(
-            Tunables::STAT_BONUS_DEPTH_MULTIPLIER * depth + Tunables::STAT_BONUS_DEPTH_BASE,
+            Tunables::STAT_BONUS_MULTIPLIER * depth + Tunables::STAT_BONUS_BASE,
             Tunables::STAT_BONUS_MAX
         );
     }
@@ -361,5 +360,3 @@ private:
 
 
 } // namespace Atom
-
-#endif // SEARCH_H

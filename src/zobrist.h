@@ -1,5 +1,4 @@
-#ifndef ZOBRIST_H
-#define ZOBRIST_H
+#pragma once
 
 #include "tt.h"
 #include "types.h"
@@ -20,5 +19,3 @@ void init();
 } // namespace Zobrist
 
 } // namespace Atom
-
-#endif

@@ -482,7 +482,7 @@ Value SearchWorker::pvSearch(
 
         sPtr->nMoves = ++nMoves;
 
-        if (RootNode && isFirstThread() && nodes > Tunables::UPDATE_NODES) {
+        if (RootNode && isFirstThread() && nodes > 1000000) {
             Uci::callbackIter(depth, currentMove, nMoves);
         }
 

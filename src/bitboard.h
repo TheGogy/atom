@@ -1,5 +1,4 @@
-#ifndef BITBOARD_H
-#define BITBOARD_H
+#pragma once
 
 #include <immintrin.h>
 #include <string>
@@ -128,5 +127,3 @@ inline Bitboard attacks(Square sq, Bitboard occupied = 0) {
 }
 
 } // namespace Atom
-
-#endif // BITBOARD_H

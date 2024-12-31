@@ -1,5 +1,4 @@
-#ifndef POSITION_H
-#define POSITION_H
+#pragma once
 
 #include "bitboard.h"
 #include "nnue/nnue_accumulator.h"
@@ -357,5 +356,3 @@ inline Key Position::hashAfter(const Move m) const {
 }
 
 } // namespace Atom
-
-#endif

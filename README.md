@@ -15,11 +15,44 @@ Requires g++ compiler. Some parts (i.e memory) may only work on linux.
 ```bash
 git clone https://github.com/thegogy/atom
 cd atom
-wget https://tests.stockfishchess.org/api/nn/nn-68207f2da9ea.nnue # Big nnue
-wget https://tests.stockfishchess.org/api/nn/nn-37f18f62d772.nnue # Small nnue
 make release
 ```
-Ensure that the NNUE files are in the base directory (the same as this README) and *not* the src directory.
+This will automatically download the NNUE files and compile the bot.
+
+## Playing
+
+This is [UCI](https://en.wikipedia.org/wiki/Universal_Chess_Interface) compatible. You can use any UCI-compatible interface to play it, such as [en-croissant](https://github.com/franciscoBSalgueiro/en-croissant) or [cutechess](https://cutechess.com/).
+
+## Tuning
+
+This bot uses [weather-factory](https://github.com/jnlt3/weather-factory) for tuning. In order to tune the bot, use the following steps:
+
+```bash
+# Install weather factory
+git clone https://github.com/jnlt3/weather-factory tuning
+# Make tuner dir
+mkdir tuning/tuner
+```
+
+You should also install [fastchess](https://github.com/Disservin/fastchess) and place the binary in the `tuner` dir.
+
+```bash
+# Build engine for tuning
+make clean
+make tune
+cp atom tuning/tuner/engine
+```
+
+```bash
+# Run tuning
+cd tuning
+
+# Put tunables in config.json
+./tuner/engine tunables > config.json
+
+# Run tuning
+python main.py
+```
 
 ## Inspiration
 
@@ -31,6 +64,7 @@ NNUE from [Stockfish](https://github.com/official-stockfish/Stockfish/). For mor
 
 ## Todo
 
-- Time management
-- EGTB pruning
-- Testing for search
+[ ] Tune parameters
+[ ] Time management
+[ ] EGTB pruning
+[ ] Testing for search

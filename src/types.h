@@ -1,5 +1,4 @@
-#ifndef TYPES_H
-#define TYPES_H
+#pragma once
 
 #include <algorithm>
 #include <cassert>
@@ -553,5 +552,3 @@ constexpr Value PIECE_VALUE[PIECE_NB] = {
 };
 
 } // namespace Atom
-
-#endif // CHESS_H_INCLUDED
