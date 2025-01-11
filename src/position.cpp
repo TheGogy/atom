@@ -920,87 +920,91 @@ inline bool Position::isInMoveList(const Move m, const Piece pc) const {
 }
 
 
-// Static exchange evaluation (Stockfish). If all the available trades happen in the
+// Static exchange evaluation. If all the available trades happen in the
 // position, are we winning?
-bool Position::see(Move move, int threshold) const {
+bool Position::see(const Move move, const int threshold) const {
+
+    constexpr int PIECE_VALS[PIECE_TYPE_NB] = {
+        0, // No piece
+        VALUE_PAWN, VALUE_KNIGHT, VALUE_BISHOP, VALUE_ROOK, VALUE_QUEEN,
+        0, // King
+        0  // Invalid
+    };
 
     assert(isValidMove(move));
+    const PieceType captured = this->getCaptured(move);
+    const PieceType promotion = movePromotionType(move);
 
-    if (moveTypeOf(move) != MT_NORMAL) {
-        // Handle enpassants, castling and promotions
-        // separately: these moves do not require an exchange
-        return VALUE_ZERO >= threshold;
-    }
+    int score = -threshold;
+    score += PIECE_VALS[captured];
 
-    const Square from = moveFrom(move);
-    const Square to   = moveTo(move);
+    if (promotion) score += PIECE_VALS[promotion] - PIECE_VALS[PAWN];
 
-    Value swap  = PIECE_VALUE[getPieceAt(to)] - threshold;
-    if (swap < 0) {
-        return false;
-    }
+    if (score < 0) return false;
 
-    swap = PIECE_VALUE[getPieceAt(from)] - swap;
-    if (swap <= 0) {
-        return true;
-    }
+    PieceType next = promotion ? promotion : typeOf(this->getPieceAt(moveFrom(move)));
+    score -= PIECE_VALS[next];
 
-    assert(colorOf(getPieceAt(from)) == getSideToMove());
+    if (score >= 0) return true;
 
-    Color stm           = getSideToMove();
-    Bitboard occ        = getPiecesBB() ^ from ^ to;
-    Bitboard attackers  = getAttackersTo(to, occ);
-    Bitboard stmAttackers, bb;
-    int result = 1;
 
-    while (true) {
-        stm = ~stm;
-        attackers &= occ;
+    const Square from   = moveFrom(move);
+    const Square square = moveTo(move);
 
-        // If the side to move has no more attackers, they lose
-        if (!(stmAttackers = attackers & getPiecesBB(stm))) {
-            break;
+    // Sliding pieces
+    const Bitboard bq = getPiecesBB(BISHOP, QUEEN);
+    const Bitboard rq = getPiecesBB(ROOK,   QUEEN);
+
+    // Occupancy and attack bitboards
+    Bitboard occ = this->getPiecesBB() ^ sqToBB(from) ^ sqToBB(square);
+    Bitboard atk = this->getAttackersTo(square, occ);
+
+    // Start with opponent
+    Color us = ~this->getSideToMove();
+
+    // Pop the least valuable piece, used in loop
+    const auto popLVPiece = [&] (const Bitboard atk) constexpr -> PieceType {
+        for (PieceType pt = PAWN; pt <= KING; ++pt) {
+            const Bitboard bb = atk & getPiecesBB(us, pt);
+            if (bb) {
+                const Square s = bitscan(bb);
+                occ ^= sqToBB(s);
+                return pt;
+            }
         }
+        return NO_PIECE_TYPE;
+    };
 
-        // TODO: Remove pinned pieces here
+    do {
+        const Bitboard ourAtk = atk & getPiecesBB(us);
 
-        // Flip the result bit
-        result ^= 1;
+        // Stop when we have no attackers
+        if (ourAtk == 0) break;
 
-        // Remove next attacker and add any x-ray attackers behind it to 'attackers'.
-        if ((bb = stmAttackers & getPiecesBB(PAWN))) {
-            if ((swap = VALUE_PAWN - swap) < result) break;
-            occ ^= lsbBitboard(bb);
-            attackers |= attacks<BISHOP>(to, occ) & getPiecesBB(BISHOP, QUEEN);
+        // Get next piece in attack
+        next = popLVPiece(ourAtk);
 
-        } else if ((bb = stmAttackers & getPiecesBB(KNIGHT))) {
-            if ((swap = VALUE_KNIGHT - swap) < result) break;
-            occ ^= lsbBitboard(bb);
+        // See if this opens up any diagonal / orthogonal lines
+        if (next == PAWN || next == BISHOP || next == QUEEN)
+            atk |= attacks<BISHOP>(square, occ) & bq;
 
-        } else if ((bb = stmAttackers & getPiecesBB(BISHOP))) {
-            if ((swap = VALUE_BISHOP - swap) < result) break;
-            occ ^= lsbBitboard(bb);
-            attackers |= attacks<BISHOP>(to, occ) & getPiecesBB(BISHOP, QUEEN);
+        if (next == ROOK || next == QUEEN)
+            atk |= attacks<ROOK>(square, occ) & rq;
 
-        } else if ((bb = stmAttackers & getPiecesBB(ROOK))) {
-            if ((swap = VALUE_ROOK - swap) < result) break;
-            occ ^= lsbBitboard(bb);
-            attackers |= attacks<ROOK>(to, occ) & getPiecesBB(ROOK, QUEEN);
+        // Remove any used attackers from occ
+        atk &= occ;
 
-        } else if ((bb = stmAttackers & getPiecesBB(QUEEN))) {
-            if ((swap = VALUE_QUEEN - swap) < result) break;
-            occ ^= lsbBitboard(bb);
-            attackers |= (attacks<BISHOP>(to, occ) & getPiecesBB(BISHOP, QUEEN))
-                       | (attacks<ROOK>(to, occ)   & getPiecesBB(ROOK, QUEEN));
+        // Make sure SEE score deteriorates over time
+        score = -score - 1 - PIECE_VALS[next];
+        us = ~us;
 
-        } else { // King
-            // If we have to capture with the king but the opponent still has
-            // attackers, we lost.
-            return (attackers & ~getPiecesBB(stm)) ? result ^ 1 : result;
-        }
-    }
+        // Hmmst
+        if (score >= 0 && next == KING && (atk & getPiecesBB(us)))
+            us = ~us;
 
-    return bool(result);
+    } while (score >= 0);
+
+    return this->getSideToMove() != us;
 }
 
 

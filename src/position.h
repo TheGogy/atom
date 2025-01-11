@@ -78,16 +78,18 @@ public:
     template <Color Me> void undoNullMove();
 
     // Returns position metadata.
-    inline Color getSideToMove()             const { return sideToMove; }
-    inline int getHalfMoveClock()            const { return state->fiftyMoveRule; }
-    inline int getHalfMoves()                const { return state->halfMoves; }
-    inline int getFullMoves()                const { return 1 + (getHalfMoves() - (sideToMove == BLACK)) / 2; }
-    inline Square getEpSquare()              const { return state->epSquare; }
-    inline Piece getPieceAt(Square sq)       const { return pieces[sq]; }
-    inline bool isEmpty(Square sq)           const { return getPieceAt(sq) == NO_PIECE; }
-    inline bool isEmpty(Bitboard b)          const { return !(b & getPiecesBB()); }
-    inline bool canCastle(CastlingRight cr)  const { return state->castlingRights & cr; }
-    inline CastlingRight getCastlingRights() const { return state->castlingRights; }
+    inline Color getSideToMove()                   const { return sideToMove; }
+    inline int getHalfMoveClock()                  const { return state->fiftyMoveRule; }
+    inline int getHalfMoves()                      const { return state->halfMoves; }
+    inline int getFullMoves()                      const { return 1 + (getHalfMoves() - (sideToMove == BLACK)) / 2; }
+    inline Square getEpSquare()                    const { return state->epSquare; }
+    inline Piece getPieceAt(const Square sq)       const { return pieces[sq]; }
+    inline bool isEmpty(const Square sq)           const { return getPieceAt(sq) == NO_PIECE; }
+    inline bool isEmpty(const Bitboard b)          const { return !(b & getPiecesBB()); }
+    inline bool canCastle(const CastlingRight cr)  const { return state->castlingRights & cr; }
+    inline CastlingRight getCastlingRights()       const { return state->castlingRights; }
+
+    inline PieceType getCaptured(const Move m) const { return typeOf(getPieceAt(moveTo(m))); }
 
     // Returns various bitboards.
     inline Bitboard getPiecesBB() const           { return sideBB[WHITE] | sideBB[BLACK]; }
@@ -181,7 +183,7 @@ public:
     }
 
     // Static exchange evaluation (SEE).
-    bool see(Move move, int threshold) const;
+    bool see(const Move move, const int threshold) const;
 
     // Check to see if a piece can see another piece
     inline bool pieceSees(const PieceType pt, const Square seer, const Bitboard victim, const Bitboard occ) const {
