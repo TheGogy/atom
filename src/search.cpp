@@ -166,7 +166,7 @@ void SearchWorker::iterativeDeepening() {
 
         // Reset aspiration window
         avg = rootMoves[0].avgScore;
-        delta = Tunables::ASPIRATION_WINDOW_SIZE + avg * avg / Tunables::ASPIRATION_WINDOW_DIVISOR;
+        delta = Tunables::ASPIRATION_WINDOW_SIZE + std::abs(rootMoves[0].meanSquaredScore) / Tunables::ASPIRATION_WINDOW_DIVISOR;
         alpha = std::max(-VALUE_INFINITE, avg - delta);
         beta  = std::min( VALUE_INFINITE, avg + delta);
 
@@ -645,6 +645,9 @@ Value SearchWorker::pvSearch(
             RootMove& rm = *std::find(rootMoves.begin(), rootMoves.end(), currentMove);
 
             rm.avgScore = (rm.avgScore != -VALUE_INFINITE ? (score + rm.avgScore) / 2 : score);
+            rm.meanSquaredScore = rm.meanSquaredScore != -VALUE_INFINITE * VALUE_INFINITE
+                                ? (score * score + rm.meanSquaredScore) / 2
+                                : score * score;
 
             if (nMoves == 1 || score > alpha) {
 

@@ -127,6 +127,7 @@ struct RootMove {
     Value prevScore = -VALUE_INFINITE;
     Value avgScore  = -VALUE_INFINITE;
     Value uciScore  = -VALUE_INFINITE;
+    Value meanSquaredScore = -VALUE_INFINITE * VALUE_INFINITE;
     Depth selDepth  = 0;
     MoveList pv;
 };
